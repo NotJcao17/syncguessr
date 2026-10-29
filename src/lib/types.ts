@@ -1,84 +1,108 @@
-export type Language = "es" | "en" | "all";
-export type Genre = "pop" | "rock" | "urban" | "hiphop" | "classics";
-export type Era = "pre-2000" | "2000s" | "2010s" | "2020s";
+export type Language = "es" | "en";
+export type LanguageFilter = Language | "all";
+export type Genre = "pop" | "rock" | "urban" | "classics";
+export type Era = "pre-80" | "80s" | "90s" | "2000s" | "2010s" | "2020s";
 export type Difficulty = "easy" | "medium" | "hard" | "expert";
 
 export const ALL_GENRES: { id: Genre; label: string }[] = [
   { id: "pop", label: "Pop" },
   { id: "rock", label: "Rock" },
-  { id: "urban", label: "Urbano / Reggaetón" },
-  { id: "hiphop", label: "Hip-Hop" },
-  { id: "classics", label: "Clásicos" },
+  { id: "urban", label: "Urbano y hip-hop" },
+  { id: "classics", label: "Clásicos y baladas" },
 ];
 
 export const ALL_ERAS: { id: Era; label: string }[] = [
-  { id: "2020s", label: "2020s" },
-  { id: "2010s", label: "2010s" },
+  { id: "pre-80", label: "Antes de los 80" },
+  { id: "80s", label: "80s" },
+  { id: "90s", label: "90s" },
   { id: "2000s", label: "2000s" },
-  { id: "pre-2000", label: "Clásicos < 2000" },
+  { id: "2010s", label: "2010s" },
+  { id: "2020s", label: "2020s" },
 ];
 
 export const ALL_DIFFICULTIES: { id: Difficulty; label: string }[] = [
   { id: "easy", label: "Fácil" },
-  { id: "medium", label: "Medio" },
+  { id: "medium", label: "Media" },
   { id: "hard", label: "Difícil" },
   { id: "expert", label: "Experto" },
 ];
 
+export const LANGUAGES: { id: LanguageFilter; label: string }[] = [
+  { id: "es", label: "Español" },
+  { id: "en", label: "Inglés" },
+  { id: "all", label: "Ambos" },
+];
+
+/** A catalog entry as stored in src/data/tracks.json. */
 export interface Track {
   id: number;
   title: string;
-  rawTitle?: string;
   artist: string;
   album: string;
   cover: string;
   coverXl: string;
-  preview: string;
   rank: number;
-  language: "es" | "en";
-  genre: "pop" | "rock" | "urban" | "hiphop" | "classics";
-  era: "pre-2000" | "2000s" | "2010s" | "2020s";
-  difficulty: "easy" | "medium" | "hard" | "expert";
+  year: number;
+  language: Language;
+  genre: Genre;
+  era: Era;
+  difficulty: Difficulty;
 }
 
-export type StageStatus = "locked" | "active" | "skipped" | "failed" | "solved";
-
-export interface StageConfig {
-  index: number;
-  duration: number; // in seconds: 0.1, 0.5, 2.0, 8.0, 15.0
-  enabled: boolean;
+export interface Filters {
+  language: LanguageFilter;
+  genres: Genre[];
+  eras: Era[];
+  difficulties: Difficulty[];
 }
 
-export interface RoundResponse {
-  trackId: number;
-  previewUrl: string;
-  duration: number;
-  language: "es" | "en";
-  genre: string;
-  era: string;
-  difficulty: string;
+/** Where the songs of a round or game come from. */
+export type Source = { kind: "filters"; filters: Filters } | { kind: "artists"; artists: string[] };
+
+/** What the client knows about a round before solving it: an opaque token, never the track id. */
+export interface RoundTicket {
+  token: string;
+  /** True when every song matching the filters had been played and the history was recycled. */
+  recycled?: boolean;
+}
+
+export interface RevealedTrack {
+  id: number;
+  title: string;
+  artist: string;
+  album: string;
+  cover: string;
+  coverXl: string;
+  year: number;
+  deezerUrl: string;
 }
 
 export interface VerifyResponse {
   correct: boolean;
-  track?: {
-    id: number;
-    title: string;
-    artist: string;
-    album: string;
-    cover: string;
-    coverXl: string;
-    preview: string;
-    deezerUrl: string;
-    releaseDate?: string;
-  };
+  /** The guess was wrong but by the right artist. */
+  artistMatch?: boolean;
+  track?: RevealedTrack;
 }
 
 export interface SearchResultItem {
   id: number;
   title: string;
   artist: string;
-  album: string;
   cover: string;
-  rank: number;
+}
+
+export interface ArtistResult {
+  name: string;
+  songs: number;
+  cover: string;
+}
+
+/** Song counts per facet combination, so the client can count any filter selection offline. */
+export interface CatalogFacets {
+  languages: Language[];
+  genres: Genre[];
+  eras: Era[];
+  difficulties: Difficulty[];
+  /** counts[lang][genre][era][difficulty] */
+  counts: number[][][][];
 }

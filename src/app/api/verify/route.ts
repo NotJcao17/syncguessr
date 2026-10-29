@@ -1,45 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTrackById } from "@/lib/catalog";
-import { VerifyResponse } from "@/lib/types";
+import { getTrack, titleKey } from "@/lib/catalog";
+import { openTrackToken } from "@/lib/token";
+import { RevealedTrack, Track, VerifyResponse } from "@/lib/types";
 
+const reveal = (t: Track): RevealedTrack => ({
+  id: t.id,
+  title: t.title,
+  artist: t.artist,
+  album: t.album,
+  cover: t.cover,
+  coverXl: t.coverXl || t.cover,
+  year: t.year,
+  deezerUrl: `https://www.deezer.com/track/${t.id}`,
+});
 
+/** Checks a guess. The answer is only revealed when the guess is right or the player gives up. */
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { trackId, guessId, surrender = false } = body;
+  const body = await request.json().catch(() => null);
+  const trackId = openTrackToken(body?.token);
+  const track = trackId !== null ? getTrack(trackId) : undefined;
+  if (!track) return NextResponse.json({ error: "Ronda inválida" }, { status: 400 });
 
-    if (!trackId) {
-      return NextResponse.json({ error: "Missing trackId" }, { status: 400 });
-    }
-
-    const track = getTrackById(Number(trackId));
-    if (!track) {
-      return NextResponse.json({ error: "Track not found" }, { status: 404 });
-    }
-
-    const isCorrect = Number(guessId) === Number(track.id);
-
-    // If correct or surrendered, return full details
-    if (isCorrect || surrender) {
-      const responseData: VerifyResponse = {
-        correct: isCorrect,
-        track: {
-          id: track.id,
-          title: track.title,
-          artist: track.artist,
-          album: track.album,
-          cover: track.cover,
-          coverXl: track.coverXl || track.cover,
-          preview: track.preview,
-          deezerUrl: `https://www.deezer.com/track/${track.id}`,
-        },
-      };
-      return NextResponse.json(responseData);
-    }
-
-    return NextResponse.json({ correct: false });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Error verifying guess";
-    return NextResponse.json({ error: message }, { status: 500 });
+  if (body.reveal === true) {
+    const res: VerifyResponse = { correct: false, track: reveal(track) };
+    return NextResponse.json(res);
   }
+
+  const guess = getTrack(Number(body.guessId));
+  if (!guess) return NextResponse.json({ error: "Canción desconocida" }, { status: 400 });
+
+  // The right title counts even by another artist: covers share a title, and recognizing the song
+  // from a clip is the point. Distinct songs that merely share a title are rare enough to accept.
+  const sameSong = guess.id === track.id || titleKey(guess.title) === titleKey(track.title);
+  const res: VerifyResponse = sameSong
+    ? { correct: true, track: reveal(track) }
+    : { correct: false, artistMatch: guess.artist === track.artist };
+  return NextResponse.json(res);
 }

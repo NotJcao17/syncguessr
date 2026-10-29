@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# syncguessr
 
-## Getting Started
+Juego de adivinar canciones desde 0.1 segundos. Parte de la familia Syncora: misma paleta nocturna,
+tipografía Archivo con eje de anchura e iconos Solar en estilo *broken*.
 
-First, run the development server:
+## Modos
+
+- **Reto diario**: 5 canciones elegidas por fecha, iguales para todos. Se juega una vez al día y guarda racha.
+- **Partida**: 5, 10 o 15 canciones con los filtros que elijas. Puntos por pista (1000 en 0.1s … 200 en 15s),
+  +10% por acierto seguido (hasta +50%) y un cuarto de los puntos si fallas la canción pero aciertas el artista.
+  Guarda récord por longitud y mezcla de dificultad.
+- **Modo artista**: solo canciones de los artistas elegidos, con récord por selección.
+- **Libre**: sin fin, con filtros, racha y opción de quitar pistas.
+
+Partida y modo artista generan **enlaces de reto**: la semilla hace que quien lo abra escuche exactamente las
+mismas canciones e intente superar tu puntuación.
+
+## Desarrollo
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+En producción define `SYNCGUESSR_SECRET` (cualquier cadena larga). Cifra los tokens de ronda para que el
+navegador nunca vea el id de Deezer de la canción que suena.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Estructura
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/app/api/*`: rondas (`round`, `game`), verificación, búsqueda, artistas, conteos del catálogo y proxy de audio.
+- `src/lib/catalog.ts`: filtros, selección aleatoria con diversidad de artistas y selección determinista por semilla.
+- `src/lib/audioEngine.ts`: Web Audio con inicio en el primer sonido audible, fundidos y precarga.
+- `src/hooks/useRound.ts` / `useGameSession.ts`: lógica de una ronda y de una secuencia de rondas.
+- `scripts/gen-icons.mjs`: genera `src/components/Icon.tsx` desde `@iconify-json/solar`.
 
-## Learn More
+## Catálogo
 
-To learn more about Next.js, take a look at the following resources:
+`src/data/tracks.json` se genera con `scripts/catalog/`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. `1-dedupe.mjs`: una sola grabación por canción; descarta en vivo, remixes, regrabaciones y demás versiones.
+2. `2-enrich.mjs`: agrega canciones icónicas que falten (`iconic.mjs`), refresca datos de Deezer y busca el año
+   original en MusicBrainz (1 petición por segundo, tarda ~1 h; todo queda en caché en `scripts/catalog/.cache/`).
+3. `3-build.mjs`: año y época reales, un género por artista y dificultad calculada combinando
+   popularidad actual, fama del artista, posición de la canción en su discografía y antigüedad.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Los covers se quedan en el catálogo: adivinar el título correcto cuenta aunque elijas la versión de otro artista.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+node scripts/catalog/1-dedupe.mjs
+node scripts/catalog/2-enrich.mjs
+node scripts/catalog/3-build.mjs
+```

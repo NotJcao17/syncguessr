@@ -1,204 +1,228 @@
 /**
- * Motor de Audio para syncguessr usando Web Audio API.
- * Garantiza reproducción con precisión de milisegundos para clips de 0.1s, 0.5s, 2s, etc.
- * sin cortes ni retardos de buffer de <audio> tradicional.
- * Incluye protección contra race conditions verificando el trackId activo.
+ * Web Audio engine for syncguessr.
+ * - Decoded buffers give exact clip lengths (0.1s really is 0.1s, unlike <audio>).
+ * - Clips start at the first audible moment: Deezer previews often open with a fade-in,
+ *   which would make the 0.1s stage near-silent.
+ * - Every source gets a few milliseconds of fade so cuts never click.
+ * - Any number of components can subscribe; nobody replaces anybody else's listener.
  */
 
-type PlayStateCallback = (isPlaying: boolean) => void;
-type ProgressCallback = (progress: number) => void;
+export interface PlaybackState {
+  playing: boolean;
+  /** 0..1 within the current clip. */
+  progress: number;
+  /** Clip length in seconds, or the full preview length. */
+  duration: number;
+  kind: "clip" | "full" | null;
+}
+
+interface LoadedAudio {
+  buffer: AudioBuffer;
+  /** Seconds to skip so the clip starts with sound. */
+  onset: number;
+}
+
+type Listener = (state: PlaybackState) => void;
+
+const FADE = 0.008;
+const MAX_CACHED = 4;
+
+function findOnset(buffer: AudioBuffer): number {
+  const data = buffer.getChannelData(0);
+  const rate = buffer.sampleRate;
+  const win = Math.floor(rate * 0.01);
+  const span = Math.min(data.length, Math.floor(rate * 15));
+  const rms: number[] = [];
+  for (let i = 0; i + win <= span; i += win) {
+    let sum = 0;
+    for (let j = i; j < i + win; j++) sum += data[j] * data[j];
+    rms.push(Math.sqrt(sum / win));
+  }
+  if (rms.length === 0) return 0;
+  const sorted = [...rms].sort((a, b) => a - b);
+  const typical = sorted[Math.floor(sorted.length * 0.5)];
+  const threshold = Math.max(0.01, typical * 0.35);
+  const maxWindows = Math.min(rms.length, 400); // never skip more than 4s
+  for (let i = 0; i < maxWindows; i++) {
+    if (rms[i] >= threshold) return i * 0.01;
+  }
+  return 0;
+}
 
 class AudioEngine {
   private ctx: AudioContext | null = null;
-  private gainNode: GainNode | null = null;
-  private currentBuffer: AudioBuffer | null = null;
-  private currentSource: AudioBufferSourceNode | null = null;
-  private currentTrackId: number | null = null;
-  private pendingTrackId: number | null = null;
+  private master: GainNode | null = null;
+  private cache = new Map<string, Promise<LoadedAudio | null>>();
+  private current: { key: string; audio: LoadedAudio } | null = null;
+  private source: AudioBufferSourceNode | null = null;
+  private envelope: GainNode | null = null;
+  private startedAt = 0;
+  private frame: number | null = null;
+  private volume = 0.85;
+  private listeners = new Set<Listener>();
+  private state: PlaybackState = { playing: false, progress: 0, duration: 0, kind: null };
 
-  private startTime = 0;
-  private playDuration = 0;
-  private animFrameId: number | null = null;
-  private isPlaying = false;
-  private currentVolume = 0.85;
-
-  private onPlayStateChange: PlayStateCallback | null = null;
-  private onProgress: ProgressCallback | null = null;
-
-  private applyVolume() {
-    if (!this.gainNode || !this.ctx) return;
-    // Logarithmic curve for natural hearing perception
-    // When volume is <= 0.005, gain is 0 (silent)
-    // Small volume (e.g. 0.02) yields 0.000057 (-85 dB, barely audible whisper)
-    const actualGain = this.currentVolume <= 0.005 ? 0 : Math.pow(this.currentVolume, 2.5);
-    try {
-      this.gainNode.gain.cancelScheduledValues(this.ctx.currentTime);
-      this.gainNode.gain.setValueAtTime(actualGain, this.ctx.currentTime);
-      this.gainNode.gain.value = actualGain;
-    } catch {
-      this.gainNode.gain.value = actualGain;
-    }
-  }
-
-  private initContext() {
+  private ensureContext() {
     if (!this.ctx) {
-      const AudioCtx =
+      const Ctx =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtx();
-      this.gainNode = this.ctx.createGain();
-      this.gainNode.connect(this.ctx.destination);
+      this.ctx = new Ctx();
+      this.master = this.ctx.createGain();
+      this.master.connect(this.ctx.destination);
+      this.applyVolume();
     }
-    if (this.ctx.state === "suspended") {
-      this.ctx.resume();
-    }
-    this.applyVolume();
+    if (this.ctx.state === "suspended") void this.ctx.resume();
+    return this.ctx;
   }
 
-  public setCallbacks(onState: PlayStateCallback, onProg: ProgressCallback) {
-    this.onPlayStateChange = onState;
-    this.onProgress = onProg;
+  private applyVolume() {
+    if (!this.master || !this.ctx) return;
+    // Perceptual curve: linear sliders sound far too loud at the bottom of their range.
+    const gain = this.volume <= 0.005 ? 0 : Math.pow(this.volume, 2.5);
+    this.master.gain.setTargetAtTime(gain, this.ctx.currentTime, 0.015);
   }
 
-  public async loadAudio(url: string, trackId: number): Promise<boolean> {
+  private emit(patch: Partial<PlaybackState>) {
+    this.state = { ...this.state, ...patch };
+    for (const l of this.listeners) l(this.state);
+  }
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    listener(this.state);
+    return () => this.listeners.delete(listener);
+  }
+
+  private fetchAudio(url: string): Promise<LoadedAudio | null> {
+    const cached = this.cache.get(url);
+    if (cached) return cached;
+    const promise = (async () => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const bytes = await res.arrayBuffer();
+        const buffer = await this.ensureContext().decodeAudioData(bytes);
+        return { buffer, onset: findOnset(buffer) };
+      } catch {
+        return null;
+      }
+    })();
+    this.cache.set(url, promise);
+    promise.then((r) => {
+      if (!r) this.cache.delete(url);
+    });
+    while (this.cache.size > MAX_CACHED) {
+      const oldest = this.cache.keys().next().value!;
+      if (oldest === this.current?.key) break;
+      this.cache.delete(oldest);
+    }
+    return promise;
+  }
+
+  /** Starts downloading and decoding a round in the background. */
+  preload(url: string) {
+    void this.fetchAudio(url);
+  }
+
+  /** Makes `url` the active round. Resolves false when the audio can't be used. */
+  async load(url: string): Promise<boolean> {
     this.stop();
-    this.currentBuffer = null;
-    this.currentTrackId = null;
-    this.pendingTrackId = trackId;
-
-    try {
-      this.initContext();
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.warn(`[AudioEngine] Audio fetch returned status ${response.status} for track ${trackId}`);
-        return false;
-      }
-
-      // Check if another track was requested while fetching
-      if (this.pendingTrackId !== trackId) {
-        return false;
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-
-      if (this.pendingTrackId !== trackId) {
-        return false;
-      }
-
-      if (!this.ctx) {
-        console.warn("[AudioEngine] AudioContext not initialized");
-        return false;
-      }
-
-      const decoded = await this.ctx.decodeAudioData(arrayBuffer);
-
-      if (this.pendingTrackId !== trackId) {
-        return false;
-      }
-
-      this.currentBuffer = decoded;
-      this.currentTrackId = trackId;
-      return true;
-    } catch (err) {
-      console.warn("[AudioEngine] Warn loading preview:", err);
-      return false;
-    }
+    this.current = null;
+    const audio = await this.fetchAudio(url);
+    if (!audio) return false;
+    this.current = { key: url, audio };
+    return true;
   }
 
-  public playSegment(durationSeconds: number) {
-    if (!this.currentBuffer) return;
-    this.initContext();
+  isLoaded(url: string) {
+    return this.current?.key === url;
+  }
+
+  /** Waveform peaks (0..1) of the first `seconds` after the onset. */
+  peaks(seconds: number, bins: number): number[] {
+    if (!this.current) return [];
+    const { buffer, onset } = this.current.audio;
+    const data = buffer.getChannelData(0);
+    const start = Math.floor(onset * buffer.sampleRate);
+    const end = Math.min(data.length, start + Math.floor(seconds * buffer.sampleRate));
+    const step = Math.max(1, Math.floor((end - start) / bins));
+    const out: number[] = [];
+    for (let b = 0; b < bins; b++) {
+      let peak = 0;
+      const from = start + b * step;
+      for (let i = from; i < Math.min(end, from + step); i += 4) peak = Math.max(peak, Math.abs(data[i]));
+      out.push(peak);
+    }
+    const max = Math.max(...out, 0.0001);
+    return out.map((p) => p / max);
+  }
+
+  /** Plays the first `seconds` of the song (from the onset), or the whole preview. */
+  play(seconds: number | "full") {
+    if (!this.current) return;
+    const ctx = this.ensureContext();
     this.stop();
 
-    if (!this.ctx || !this.gainNode) return;
+    const { buffer, onset } = this.current.audio;
+    const offset = seconds === "full" ? 0 : onset;
+    const duration = seconds === "full" ? buffer.duration : Math.min(seconds, buffer.duration - offset);
 
-    const source = this.ctx.createBufferSource();
-    source.buffer = this.currentBuffer;
-    source.connect(this.gainNode);
+    const envelope = ctx.createGain();
+    envelope.connect(this.master!);
+    const t0 = ctx.currentTime + 0.01;
+    const fade = Math.min(FADE, duration / 4);
+    envelope.gain.setValueAtTime(0, t0);
+    envelope.gain.linearRampToValueAtTime(1, t0 + fade);
+    envelope.gain.setValueAtTime(1, t0 + duration - fade);
+    envelope.gain.linearRampToValueAtTime(0, t0 + duration);
 
-    const maxDur = Math.min(durationSeconds, this.currentBuffer.duration);
-    this.playDuration = maxDur;
-    this.startTime = this.ctx.currentTime;
-    this.currentSource = source;
-    this.isPlaying = true;
-    this.onPlayStateChange?.(true);
-
-    this.applyVolume();
-    source.start(0, 0, maxDur);
-
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(envelope);
+    source.start(t0, offset, duration);
     source.onended = () => {
-      if (this.currentSource === source) {
-        this.stop();
-      }
+      if (this.source === source) this.stop();
     };
 
-    this.startProgressLoop();
+    this.source = source;
+    this.envelope = envelope;
+    this.startedAt = t0;
+    this.emit({ playing: true, progress: 0, duration, kind: seconds === "full" ? "full" : "clip" });
+    this.tick();
   }
 
-  public playFull() {
-    if (!this.currentBuffer) return;
-    this.playSegment(this.currentBuffer.duration);
-  }
+  private tick = () => {
+    if (!this.ctx || !this.source) return;
+    const elapsed = Math.max(0, this.ctx.currentTime - this.startedAt);
+    this.emit({ progress: Math.min(1, elapsed / this.state.duration) });
+    this.frame = requestAnimationFrame(this.tick);
+  };
 
-  public stop() {
-    if (this.currentSource) {
+  stop() {
+    if (this.frame !== null) cancelAnimationFrame(this.frame);
+    this.frame = null;
+    if (this.source && this.ctx && this.envelope) {
+      const source = this.source;
+      const now = this.ctx.currentTime;
+      // Short fade instead of a hard cut, then let the node go.
+      this.envelope.gain.cancelScheduledValues(now);
+      this.envelope.gain.setValueAtTime(this.envelope.gain.value, now);
+      this.envelope.gain.linearRampToValueAtTime(0, now + FADE);
       try {
-        this.currentSource.stop();
-        this.currentSource.disconnect();
+        source.stop(now + FADE);
       } catch {
         // already stopped
       }
-      this.currentSource = null;
     }
-
-    if (this.animFrameId) {
-      cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = null;
-    }
-
-    if (this.isPlaying) {
-      this.isPlaying = false;
-      this.onPlayStateChange?.(false);
-      this.onProgress?.(0);
-    }
+    this.source = null;
+    this.envelope = null;
+    if (this.state.playing || this.state.progress !== 0) this.emit({ playing: false, progress: 0, kind: null });
   }
 
-  public setVolume(vol: number) {
-    const clamped = Math.max(0, Math.min(1, vol));
-    this.currentVolume = clamped;
+  setVolume(volume: number) {
+    this.volume = Math.max(0, Math.min(1, volume));
     this.applyVolume();
-  }
-
-  public getVolume(): number {
-    return this.currentVolume;
-  }
-
-  public getIsPlaying(): boolean {
-    return this.isPlaying;
-  }
-
-  public hasBuffer(): boolean {
-    return this.currentBuffer !== null;
-  }
-
-  public getLoadedTrackId(): number | null {
-    return this.currentTrackId;
-  }
-
-  private startProgressLoop() {
-    const update = () => {
-      if (!this.isPlaying || !this.ctx) return;
-      const elapsed = this.ctx.currentTime - this.startTime;
-      const progress = Math.min(1, Math.max(0, elapsed / this.playDuration));
-      this.onProgress?.(progress);
-
-      if (elapsed < this.playDuration && this.isPlaying) {
-        this.animFrameId = requestAnimationFrame(update);
-      } else {
-        this.stop();
-      }
-    };
-    this.animFrameId = requestAnimationFrame(update);
   }
 }
 

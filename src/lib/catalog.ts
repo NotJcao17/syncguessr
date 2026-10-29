@@ -1,134 +1,197 @@
+import "server-only";
 import tracksData from "@/data/tracks.json";
-import { Track, Language, Genre, Era, Difficulty } from "./types";
+import { seededRandom } from "./rng";
+import { sanitizeFilters } from "./filters";
+import {
+  ALL_DIFFICULTIES,
+  ALL_ERAS,
+  ALL_GENRES,
+  ArtistResult,
+  CatalogFacets,
+  Filters,
+  Language,
+  LanguageFilter,
+  SearchResultItem,
+  Source,
+  Track,
+} from "./types";
 
-const tracks: Track[] = tracksData as Track[];
+const tracks = tracksData as unknown as Track[];
+const byId = new Map(tracks.map((t) => [t.id, t]));
 
-export interface FilterParams {
-  language?: Language;
-  genres?: Genre[];
-  genre?: string;
-  eras?: Era[];
-  era?: string;
-  difficulties?: Difficulty[];
-  difficulty?: string;
-  excludeIds?: number[];
-  excludeArtist?: string;
+export function fold(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
-export function getEligibleTracks(params: FilterParams): Track[] {
-  const { language = "all", excludeIds = [] } = params;
-  const excludeSet = new Set(excludeIds);
+// Precomputed search keys: folding 13k titles on every keystroke is wasteful.
+const searchIndex = tracks.map((t) => ({ track: t, title: fold(t.title), artist: fold(t.artist) }));
 
-  let pool = tracks.filter((t) => !excludeSet.has(t.id));
-
-  // If pool was exhausted because of exclusions, reset exclusions for this category
-  if (pool.length === 0) {
-    pool = [...tracks];
-  }
-
-  // Filter Language
-  if (language !== "all") {
-    pool = pool.filter((t) => t.language === language);
-  }
-
-  // Filter Genres (multi-select support)
-  const genres =
-    params.genres && params.genres.length > 0
-      ? params.genres
-      : params.genre && params.genre !== "all"
-      ? [params.genre as Genre]
-      : [];
-
-  if (genres.length > 0 && genres.length < 5) {
-    const genreSet = new Set(genres);
-    const filtered = pool.filter((t) => genreSet.has(t.genre));
-    if (filtered.length > 0) pool = filtered;
-  }
-
-  // Filter Eras (multi-select support)
-  const eras =
-    params.eras && params.eras.length > 0
-      ? params.eras
-      : params.era && params.era !== "all"
-      ? [params.era as Era]
-      : [];
-
-  if (eras.length > 0 && eras.length < 4) {
-    const eraSet = new Set(eras);
-    const filtered = pool.filter((t) => eraSet.has(t.era));
-    if (filtered.length > 0) pool = filtered;
-  }
-
-  // Filter Difficulties (multi-select support)
-  const difficulties =
-    params.difficulties && params.difficulties.length > 0
-      ? params.difficulties
-      : params.difficulty && params.difficulty !== "all"
-      ? [params.difficulty as Difficulty]
-      : [];
-
-  if (difficulties.length > 0 && difficulties.length < 4) {
-    const diffSet = new Set(difficulties);
-    const filtered = pool.filter((t) => diffSet.has(t.difficulty));
-    if (filtered.length > 0) pool = filtered;
-  }
-
-  // Fallback if overly filtered
-  if (pool.length === 0) {
-    if (language !== "all") {
-      pool = tracks.filter((t) => t.language === language);
-    } else {
-      pool = tracks;
+const artistIndex = (() => {
+  const map = new Map<string, { name: string; key: string; songs: number; cover: string; topRank: number }>();
+  for (const t of tracks) {
+    const entry = map.get(t.artist);
+    if (!entry) map.set(t.artist, { name: t.artist, key: fold(t.artist), songs: 1, cover: t.cover, topRank: t.rank });
+    else {
+      entry.songs++;
+      if (t.rank > entry.topRank) {
+        entry.topRank = t.rank;
+        entry.cover = t.cover;
+      }
     }
   }
+  return [...map.values()];
+})();
 
-  return pool;
+export function getTrack(id: number): Track | undefined {
+  return byId.get(id);
 }
 
-let lastSelectedArtist = "";
+/** Song identity from its title alone: no subtitles, no feat., no punctuation. */
+export function titleKey(title: string): string {
+  return fold(title)
+    .replace(/[\(\[][^\)\]]*[\)\]]/g, " ")
+    .replace(/\s[-–]\s.*$/, " ")
+    .replace(/\b(feat|ft|with|con)\.?\s.*$/, " ")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9ñ ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-export function getRandomTrack(params: FilterParams): Track {
-  const pool = getEligibleTracks(params);
-  if (pool.length === 0) return tracks[0];
+export function matchesFilters(t: Track, f: Filters): boolean {
+  return (
+    (f.language === "all" || t.language === f.language) &&
+    f.genres.includes(t.genre) &&
+    f.eras.includes(t.era) &&
+    f.difficulties.includes(t.difficulty)
+  );
+}
 
-  // Group eligible tracks by artist to achieve true diversity
-  const artistMap = new Map<string, Track[]>();
-  for (const track of pool) {
-    const list = artistMap.get(track.artist) || [];
-    list.push(track);
-    artistMap.set(track.artist, list);
+/** Every song a source can produce. Never widens a filter silently: an empty pool stays empty. */
+export function eligibleTracks(source: Source): Track[] {
+  if (source.kind === "artists") {
+    const wanted = new Set(source.artists);
+    return tracks.filter((t) => wanted.has(t.artist));
+  }
+  const f = sanitizeFilters(source.filters);
+  return tracks.filter((t) => matchesFilters(t, f));
+}
+
+/** Picks an artist first and then one of their songs, so prolific artists don't dominate. */
+function pickDiverse(pool: Track[], rand: () => number, avoidArtists: Set<string>): Track {
+  const byArtist = new Map<string, Track[]>();
+  for (const t of pool) {
+    const list = byArtist.get(t.artist);
+    if (list) list.push(t);
+    else byArtist.set(t.artist, [t]);
+  }
+  let artists = [...byArtist.keys()].filter((a) => !avoidArtists.has(a));
+  if (artists.length === 0) artists = [...byArtist.keys()];
+  const songs = byArtist.get(artists[Math.floor(rand() * artists.length)])!;
+  return songs[Math.floor(rand() * songs.length)];
+}
+
+export function pickRound(
+  source: Source,
+  exclude: number[],
+  avoidArtists: string[]
+): { track: Track; recycled: boolean } | null {
+  const pool = eligibleTracks(source);
+  if (pool.length === 0) return null;
+  const excluded = new Set(exclude);
+  const fresh = pool.filter((t) => !excluded.has(t.id));
+  const recycled = fresh.length === 0;
+  const track = pickDiverse(recycled ? pool : fresh, Math.random, new Set(avoidArtists));
+  return { track, recycled };
+}
+
+/** Deterministic game: the same seed and source always give the same songs in the same order. */
+export function pickGame(source: Source, count: number, seed: string): Track[] {
+  const pool = eligibleTracks(source).sort((a, b) => a.id - b.id);
+  const rand = seededRandom(seed);
+  const chosen: Track[] = [];
+  const recentArtists: string[] = [];
+  let remaining = pool;
+  while (chosen.length < count && remaining.length > 0) {
+    const track = pickDiverse(remaining, rand, new Set(recentArtists));
+    chosen.push(track);
+    remaining = remaining.filter((t) => t.id !== track.id);
+    recentArtists.push(track.artist);
+    // With a single artist (artist mode) avoiding repeats is impossible; otherwise keep the last few apart.
+    if (recentArtists.length > 3) recentArtists.shift();
+  }
+  return chosen;
+}
+
+export function searchTracks(
+  query: string,
+  opts: { language?: LanguageFilter; artists?: string[] } = {},
+  limit = 40
+): SearchResultItem[] {
+  const q = fold(query);
+  if (q.length < 2) return [];
+  const words = q.split(/\s+/).filter(Boolean);
+  const artistSet = opts.artists?.length ? new Set(opts.artists) : null;
+
+  const scored: { t: Track; score: number }[] = [];
+  for (const { track, title, artist } of searchIndex) {
+    if (opts.language && opts.language !== "all" && track.language !== opts.language) continue;
+    if (artistSet && !artistSet.has(track.artist)) continue;
+    const both = `${title} ${artist}`;
+    if (!words.every((w) => both.includes(w))) continue;
+
+    // Ranking depends only on the query text, never on the song being played.
+    const titleScore = title === q ? 6 : title.startsWith(q) ? 4 : title.includes(q) ? 2 : 0;
+    const artistScore = artist === q ? 5 : artist.startsWith(q) ? 3 : artist.includes(q) ? 1 : 0;
+    scored.push({ t: track, score: Math.max(titleScore, artistScore) });
   }
 
-  const artists = Array.from(artistMap.keys());
-  const avoidArtist = params.excludeArtist || lastSelectedArtist;
+  scored.sort((a, b) => {
+    if (a.score !== b.score) return b.score - a.score;
+    // Inside one artist list songs A-Z so the biggest hit isn't handed out first.
+    if (a.t.artist === b.t.artist) return a.t.title.localeCompare(b.t.title, "es", { sensitivity: "base" });
+    return b.t.rank - a.t.rank;
+  });
 
-  // Filter out the last played artist if there are other candidates
-  let candidateArtists = artists.filter((a) => a !== avoidArtist);
-  if (candidateArtists.length === 0) {
-    candidateArtists = artists;
+  return scored.slice(0, limit).map(({ t }) => ({ id: t.id, title: t.title, artist: t.artist, cover: t.cover }));
+}
+
+export function searchArtists(query: string, limit = 12): ArtistResult[] {
+  const q = fold(query);
+  if (q.length < 1) {
+    return [...artistIndex].sort((a, b) => b.topRank - a.topRank).slice(0, limit).map(toArtistResult);
   }
-
-  // Pick a random artist uniformly
-  const randomArtistIndex = Math.floor(Math.random() * candidateArtists.length);
-  const chosenArtist = candidateArtists[randomArtistIndex];
-  lastSelectedArtist = chosenArtist;
-
-  // Pick a random track from the selected artist
-  const artistTracks = artistMap.get(chosenArtist)!;
-  const randomTrackIndex = Math.floor(Math.random() * artistTracks.length);
-  return artistTracks[randomTrackIndex];
+  return artistIndex
+    .filter((a) => a.key.includes(q))
+    .sort((a, b) => Number(b.key.startsWith(q)) - Number(a.key.startsWith(q)) || b.topRank - a.topRank)
+    .slice(0, limit)
+    .map(toArtistResult);
 }
 
-export function getTrackById(id: number): Track | undefined {
-  return tracks.find((t) => t.id === id);
+const toArtistResult = (a: (typeof artistIndex)[number]): ArtistResult => ({ name: a.name, songs: a.songs, cover: a.cover });
+
+let facetsCache: CatalogFacets | null = null;
+
+export function catalogFacets(): CatalogFacets {
+  if (facetsCache) return facetsCache;
+  const languages: Language[] = ["es", "en"];
+  const genres = ALL_GENRES.map((g) => g.id);
+  const eras = ALL_ERAS.map((e) => e.id);
+  const difficulties = ALL_DIFFICULTIES.map((d) => d.id);
+  const counts = languages.map(() => genres.map(() => eras.map(() => difficulties.map(() => 0))));
+  for (const t of tracks) {
+    const li = languages.indexOf(t.language);
+    const gi = genres.indexOf(t.genre);
+    const ei = eras.indexOf(t.era);
+    const di = difficulties.indexOf(t.difficulty);
+    if (li >= 0 && gi >= 0 && ei >= 0 && di >= 0) counts[li][gi][ei][di]++;
+  }
+  facetsCache = { languages, genres, eras, difficulties, counts };
+  return facetsCache;
 }
 
-export function searchLocalTracks(query: string, limit = 5): Track[] {
-  if (!query || query.trim().length < 2) return [];
-  const q = query.toLowerCase().trim();
-
-  return tracks
-    .filter((t) => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q))
-    .sort((a, b) => b.rank - a.rank)
-    .slice(0, limit);
-}
+export const catalogSize = tracks.length;

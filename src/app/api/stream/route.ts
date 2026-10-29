@@ -1,78 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
+import { openTrackToken } from "@/lib/token";
 
-// In-memory cache for audio buffers to avoid re-fetching the same track within 1 hour
-const audioCache = new Map<number, { buffer: ArrayBuffer; timestamp: number }>();
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+// Deezer preview URLs are signed and expire, so each one is resolved fresh and the audio proxied.
+const audioCache = new Map<number, { buffer: ArrayBuffer; at: number }>();
+const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_MAX = 120;
+
+async function fetchWithTimeout(url: string, ms: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { cache: "no-store", signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const audioResponse = (buffer: ArrayBuffer) =>
+  new NextResponse(buffer, {
+    headers: {
+      "Content-Type": "audio/mpeg",
+      "Content-Length": String(buffer.byteLength),
+      "Cache-Control": "private, max-age=3600",
+    },
+  });
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const idStr = searchParams.get("id");
-  if (!idStr) {
-    return new NextResponse("Missing track id", { status: 400 });
-  }
+  const trackId = openTrackToken(request.nextUrl.searchParams.get("t"));
+  if (trackId === null) return new NextResponse("Ronda inválida", { status: 400 });
 
-  const trackId = parseInt(idStr, 10);
-  if (isNaN(trackId)) {
-    return new NextResponse("Invalid track id", { status: 400 });
-  }
-
-  // Check cache
   const cached = audioCache.get(trackId);
-  const now = Date.now();
-  if (cached && now - cached.timestamp < CACHE_TTL_MS) {
-    return new NextResponse(cached.buffer, {
-      headers: {
-        "Content-Type": "audio/mpeg",
-        "Content-Length": String(cached.buffer.byteLength),
-        "Cache-Control": "public, max-age=3600",
-      },
-    });
-  }
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return audioResponse(cached.buffer);
 
   try {
-    // 1. Fetch fresh signed preview URL directly from Deezer API
-    const dzRes = await fetch(`https://api.deezer.com/track/${trackId}`, {
-      cache: "no-store",
-    });
+    const meta = await fetchWithTimeout(`https://api.deezer.com/track/${trackId}`, 8000);
+    const data = meta.ok ? await meta.json() : null;
+    if (!data?.preview) return new NextResponse("Sin vista previa", { status: 404 });
 
-    if (!dzRes.ok) {
-      return new NextResponse("Track metadata not found on Deezer", { status: 404 });
-    }
+    const audio = await fetchWithTimeout(data.preview, 12000);
+    if (!audio.ok) return new NextResponse("Deezer no respondió", { status: 502 });
+    const buffer = await audio.arrayBuffer();
 
-    const dzData = await dzRes.json();
-    const previewUrl = dzData.preview;
-
-    if (!previewUrl) {
-      return new NextResponse("Track has no audio preview on Deezer", { status: 404 });
-    }
-
-    // 2. Stream audio bytes from Deezer CDN
-    const audioRes = await fetch(previewUrl, { cache: "no-store" });
-    if (!audioRes.ok) {
-      return new NextResponse("Failed to fetch audio from Deezer CDN", { status: 502 });
-    }
-
-    const arrayBuffer = await audioRes.arrayBuffer();
-
-    // Cache the buffer
-    audioCache.set(trackId, { buffer: arrayBuffer, timestamp: now });
-
-    // Clean up old cache entries if map grows large (> 100 entries)
-    if (audioCache.size > 100) {
-      const oldestKey = audioCache.keys().next().value;
-      if (oldestKey) audioCache.delete(oldestKey);
-    }
-
-    return new NextResponse(arrayBuffer, {
-      headers: {
-        "Content-Type": "audio/mpeg",
-        "Content-Length": String(arrayBuffer.byteLength),
-        "Cache-Control": "public, max-age=3600",
-      },
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Error proxying audio";
-    console.warn(`[StreamAPI] Error fetching track ${trackId}:`, message);
-    return new NextResponse("Internal stream error", { status: 500 });
+    audioCache.delete(trackId);
+    audioCache.set(trackId, { buffer, at: Date.now() });
+    if (audioCache.size > CACHE_MAX) audioCache.delete(audioCache.keys().next().value!);
+    return audioResponse(buffer);
+  } catch (err) {
+    console.warn(`[stream] track ${trackId}:`, err instanceof Error ? err.message : err);
+    return new NextResponse("Error de audio", { status: 502 });
   }
 }
