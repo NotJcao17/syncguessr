@@ -1,6 +1,7 @@
 // Step 3: turn the enriched cache into src/data/tracks.json.
 // Works offline from whatever steps 1-2 cached; missing data falls back gracefully.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { ARTISTS } from "./artists.mjs";
 import { artistKey } from "./normalize.mjs";
 
 const CACHE = "scripts/catalog/.cache";
@@ -9,20 +10,25 @@ const load = (f, fb) => (existsSync(`${CACHE}/${f}`) ? JSON.parse(readFileSync(`
 let tracks = load("enriched.json", null) ?? load("deduped.json", []);
 const deezer = load("deezer.json", {});
 const mb = load("musicbrainz.json", {});
+const albums = load("albums.json", {});
 const log = [];
 
 // --- availability ----------------------------------------------------------
 const before = tracks.length;
 tracks = tracks.filter((t) => {
   const d = deezer[t.id];
-  return !d || (!d.missing && d.readable !== false && d.preview !== false);
+  return t.fromTop || !d || (!d.missing && d.readable !== false && d.preview !== false);
 });
 log.push(`unavailable on Deezer: ${before - tracks.length}`);
 
 // --- year --------------------------------------------------------------------
 const COMPILATION = /greatest|hits|best of|lo mejor|grandes [eé]xitos|collection|colecci[oó]n|essential|anthology|antolog[ií]a|gold|remaster|deluxe|anniversary|aniversario|live|en vivo|\bmtv\b|edition|edici[oó]n|the very best|platinum|singles|ultimate|definitive|20th|25th|30th|40th|50th/i;
 const validYear = (y) => Number.isInteger(y) && y >= 1940 && y <= 2026;
-const dzYear = (t) => parseInt((deezer[t.id]?.release ?? "").slice(0, 4), 10);
+const dzYear = (t) => {
+  const album = albums[t.albumId];
+  if (album?.type === "compile") return NaN;
+  return parseInt((deezer[t.id]?.release ?? album?.release ?? "").slice(0, 4), 10);
+};
 
 let fromMb = 0;
 let fromDz = 0;
@@ -38,6 +44,13 @@ for (const t of tracks) {
     fromDz++;
   }
 }
+// Known bad dates in MusicBrainz (a demo or bootleg credited earlier than the release).
+const YEAR_FIX = { "billie jean::michaeljackson": 1982 };
+for (const t of tracks) {
+  const fix = YEAR_FIX[`${t.songKey}::${artistKey(t.artist)}`];
+  if (fix) t.year = fix;
+}
+
 // Remaining songs take the median year of the artist's dated songs.
 const byArtist = new Map();
 for (const t of tracks) {
@@ -59,8 +72,10 @@ const eraOf = (y) => (y < 1980 ? "pre-80" : y < 1990 ? "80s" : y < 2000 ? "90s" 
 for (const t of tracks) t.era = eraOf(t.year);
 
 // --- genre: urban and hip-hop are one family; one genre per artist ------------
+// Artists listed in artists.mjs were classified there; the rest take their majority genre.
 for (const t of tracks) if (t.genre === "hiphop") t.genre = "urban";
-for (const list of byArtist.values()) {
+for (const [artist, list] of byArtist) {
+  if (ARTISTS.has(artist)) continue;
   const votes = {};
   for (const t of list) if (!t.iconic) votes[t.genre] = (votes[t.genre] ?? 0) + 1;
   const main = Object.entries(votes).sort((a, b) => b[1] - a[1])[0]?.[0];
@@ -88,15 +103,17 @@ for (const list of byArtist.values()) {
 // Covers and same-title songs stay: guessing the right title counts as correct (see /api/verify),
 // and a title-only heuristic removed far more distinct songs ("Angel", "Perfect") than real covers.
 
-// --- difficulty by quantiles, per language -----------------------------------
+// --- difficulty by quantiles, per language and genre ----------------------------
+// Ranking inside each genre keeps every filter combination playable: regional and soul songs
+// stream far less than reggaetón, so a single global ranking would leave them almost no easy songs.
 const SHARES = [
-  ["easy", 0.13],
+  ["easy", 0.16],
   ["medium", 0.3],
-  ["hard", 0.31],
+  ["hard", 0.3],
   ["expert", 1],
 ];
-for (const lang of ["es", "en"]) {
-  const list = tracks.filter((t) => t.language === lang).sort((a, b) => b.score - a.score);
+for (const group of new Set(tracks.map((t) => `${t.language}:${t.genre}`))) {
+  const list = tracks.filter((t) => `${t.language}:${t.genre}` === group).sort((a, b) => b.score - a.score);
   let i = 0;
   let acc = 0;
   for (const [level, share] of SHARES) {

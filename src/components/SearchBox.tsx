@@ -129,6 +129,16 @@ export const SearchBox = forwardRef<
 
   return (
     <div ref={rootRef} className="relative">
+      {/* Buttons above the box, so an open result list never covers them. */}
+      <div className="mb-3 grid grid-cols-[auto_1fr] gap-3">
+        <button type="button" onClick={onSkip} disabled={disabled} className="btn btn-ghost">
+          <Icon name="skip" className="size-5" />
+          {skipLabel}
+        </button>
+        <button type="button" onClick={submit} disabled={!selected || disabled} className="btn btn-primary">
+          Adivinar
+        </button>
+      </div>
       <div className="relative">
         <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-ink-3">
           <Icon name="search" className={`size-5 ${loading ? "animate-pulse" : ""}`} />
@@ -175,7 +185,7 @@ export const SearchBox = forwardRef<
           {results.length === 0 ? (
             <p className="px-4 py-4 text-sm text-ink-3">{loading ? "Buscando…" : "Nada con ese nombre en el catálogo."}</p>
           ) : (
-            <ul id={listId} role="listbox" className="max-h-[min(52dvh,380px)] overflow-y-auto p-1.5">
+            <ul id={listId} role="listbox" className="max-h-[min(44dvh,360px)] overflow-y-auto p-1.5">
               {results.map((item, i) => {
                 const already = tried.has(`${item.title}::${item.artist}`);
                 return (
@@ -207,15 +217,6 @@ export const SearchBox = forwardRef<
       )}
       </div>
 
-      <div className="mt-3 grid grid-cols-[auto_1fr] gap-3">
-        <button type="button" onClick={onSkip} disabled={disabled} className="btn btn-ghost">
-          <Icon name="skip" className="size-5" />
-          {skipLabel}
-        </button>
-        <button type="button" onClick={submit} disabled={!selected || disabled} className="btn btn-primary">
-          Adivinar
-        </button>
-      </div>
     </div>
   );
 });

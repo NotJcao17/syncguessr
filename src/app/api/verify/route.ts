@@ -11,7 +11,6 @@ const reveal = (t: Track): RevealedTrack => ({
   cover: t.cover,
   coverXl: t.coverXl || t.cover,
   year: t.year,
-  deezerUrl: `https://www.deezer.com/track/${t.id}`,
 });
 
 /** Checks a guess. The answer is only revealed when the guess is right or the player gives up. */

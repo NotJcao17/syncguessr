@@ -5,25 +5,23 @@ import { useMemo, useState } from "react";
 import { FilterPanel, MIN_SONGS, SongCount } from "@/components/FilterPanel";
 import { GameScreen } from "@/components/GameScreen";
 import { Icon } from "@/components/Icon";
-import { CountPicker, SetupLayout } from "@/components/SetupLayout";
+import { SetupLayout } from "@/components/SetupLayout";
 import { useCatalog } from "@/hooks/useCatalog";
 import { countSongs, decodeFilters, encodeFilters, summarizeFilters } from "@/lib/filters";
 import { randomSeed } from "@/lib/rng";
-import { STAGES, formatPoints } from "@/lib/scoring";
+import { GAME_LENGTH, STAGES, formatPoints } from "@/lib/scoring";
 import { loadFilters, loadRecord, saveFilters } from "@/lib/storage";
 import { Filters } from "@/lib/types";
 
-const COUNTS = [5, 10, 15];
-
-/** High scores are kept per length and difficulty mix, so an easy game can't overwrite a hard one. */
-export const partidaRecordKey = (count: number, f: Filters) =>
-  `partida:${count}:${[...f.difficulties].sort().join("-")}`;
+/** High scores are kept per difficulty mix, so an easy game can't overwrite a hard one. */
+export const partidaRecordKey = (f: Filters) => `partida:${GAME_LENGTH}:${[...f.difficulties].sort().join("-")}`;
 
 interface Game {
   filters: Filters;
-  count: number;
   seed: string;
   rival: number | null;
+  /** Challenges replay exactly the sender's songs, so they never skip recently heard ones. */
+  challenge: boolean;
 }
 
 export function PartidaGame() {
@@ -31,43 +29,56 @@ export function PartidaGame() {
   const router = useRouter();
   const catalog = useCatalog();
   const [filters, setFilters] = useState<Filters>(loadFilters);
-  const [count, setCount] = useState(5);
   const [game, setGame] = useState<Game | null>(null);
 
   // A challenge link carries the seed, the filters and optionally the score to beat.
   const challenge = (() => {
     const seed = params.get("reto");
     const f = decodeFilters(params.get("f"));
-    const n = Number(params.get("n"));
-    if (!seed || !f || !COUNTS.concat([20]).includes(n)) return null;
+    if (!seed || !f) return null;
     const p = Number(params.get("p"));
-    return { seed, filters: f, count: n, rival: Number.isFinite(p) && p > 0 ? p : null };
+    return { seed, filters: f, rival: Number.isFinite(p) && p > 0 ? p : null };
   })();
 
-  const record = useMemo(() => loadRecord(partidaRecordKey(count, filters)), [count, filters]);
+  const record = useMemo(() => loadRecord(partidaRecordKey(filters)), [filters]);
+
+  const leaveChallenge = () => {
+    if (challenge) router.replace("/partida");
+  };
 
   if (game) {
     const challengeUrl =
       typeof window === "undefined"
         ? undefined
-        : `${window.location.origin}/partida?reto=${game.seed}&n=${game.count}&f=${encodeFilters(game.filters)}`;
+        : `${window.location.origin}/partida?reto=${game.seed}&f=${encodeFilters(game.filters)}`;
     return (
       <GameScreen
         key={game.seed}
-        config={{ mode: "partida", source: { kind: "filters", filters: game.filters }, count: game.count, seed: game.seed }}
+        config={{
+          mode: "partida",
+          source: { kind: "filters", filters: game.filters },
+          count: GAME_LENGTH,
+          seed: game.seed,
+          avoidRepeats: !game.challenge,
+        }}
         stages={[...STAGES]}
-        title={`Partida de ${game.count}`}
+        title="Partida"
         subtitle={summarizeFilters(game.filters)}
         searchLanguage={game.filters.language}
-        recordKey={partidaRecordKey(game.count, game.filters)}
-        summaryHeading={game.rival ? "Reto aceptado" : `Partida de ${game.count} canciones`}
+        recordKey={partidaRecordKey(game.filters)}
+        summaryHeading={game.rival ? "Reto aceptado" : "Partida"}
         challengeUrl={challengeUrl}
         rival={game.rival}
-        againLabel="Jugar otra"
         onAgain={() => {
-          if (challenge) router.replace("/partida");
-          setGame({ ...game, seed: randomSeed(), rival: null });
+          leaveChallenge();
+          setGame({ ...game, seed: randomSeed(), rival: null, challenge: false });
         }}
+        onExit={() => {
+          leaveChallenge();
+          setFilters(game.filters);
+          setGame(null);
+        }}
+        exitLabel="Cambiar filtros"
       />
     );
   }
@@ -75,8 +86,7 @@ export function PartidaGame() {
   if (challenge) {
     return (
       <SetupLayout
-        title="Reto"
-        headline={
+        title={
           challenge.rival ? (
             <>
               Supera <span className="text-indigo-soft">{formatPoints(challenge.rival)}</span> puntos
@@ -87,7 +97,7 @@ export function PartidaGame() {
         }
         intro={
           <p>
-            Las mismas {challenge.count} canciones que jugó quien te mandó el enlace: {summarizeFilters(challenge.filters)}.
+            Las mismas {GAME_LENGTH} canciones que jugó quien te mandó el enlace: {summarizeFilters(challenge.filters)}.
           </p>
         }
         footer={
@@ -98,7 +108,7 @@ export function PartidaGame() {
             <button
               type="button"
               className="btn btn-primary flex-1"
-              onClick={() => setGame({ ...challenge })}
+              onClick={() => setGame({ ...challenge, challenge: true })}
             >
               Aceptar reto
               <Icon name="next" className="size-5" />
@@ -106,36 +116,25 @@ export function PartidaGame() {
           </div>
         }
       >
-        <p className="text-sm text-ink-3">Los puntos dependen de en qué pista la adivines. Pulsa el signo de ayuda durante la partida para ver la tabla.</p>
+        <p className="text-sm text-ink-3">Los puntos dependen de en qué pista la adivines.</p>
       </SetupLayout>
     );
   }
 
   const available = catalog ? countSongs(catalog.facets, filters) : null;
-  const canStart = available === null || available >= Math.max(count, MIN_SONGS);
+  const canStart = available === null || available >= MIN_SONGS;
 
   return (
     <SetupLayout
       title="Partida"
-      headline={
-        <>
-          {count} canciones,
-          <br />
-          <span className="text-indigo-soft">contra el reloj</span>
-        </>
-      }
-      intro={
-        <p>
-          Mil puntos si la sacas con 0.1 segundos, doscientos si necesitas los quince. Los aciertos seguidos multiplican.
-        </p>
-      }
+      intro={<p>{GAME_LENGTH} canciones. Mil puntos si la sacas en 0.1 segundos; los aciertos seguidos multiplican.</p>}
       footer={
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <SongCount facets={catalog?.facets ?? null} filters={filters} min={Math.max(count, MIN_SONGS)} />
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <SongCount facets={catalog?.facets ?? null} filters={filters} />
             <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink-3">
-              <Icon name="crown" className="size-4 text-ember-soft" />
-              {record ? `Tu récord aquí: ${formatPoints(record.score)}` : "Aún sin récord con esta dificultad"}
+              <Icon name="crown" className="size-4 shrink-0 text-ember-soft" />
+              {record ? `Récord: ${formatPoints(record.score)}` : "Sin récord con esta dificultad"}
             </p>
           </div>
           <button
@@ -144,7 +143,7 @@ export function PartidaGame() {
             disabled={!canStart}
             onClick={() => {
               saveFilters(filters);
-              setGame({ filters, count, seed: randomSeed(), rival: null });
+              setGame({ filters, seed: randomSeed(), rival: null, challenge: false });
             }}
           >
             Empezar
@@ -153,10 +152,7 @@ export function PartidaGame() {
         </div>
       }
     >
-      <CountPicker value={count} options={COUNTS} onChange={(n) => setCount(n ?? 5)} />
-      <div className="mt-6">
-        <FilterPanel value={filters} onChange={setFilters} facets={catalog?.facets ?? null} />
-      </div>
+      <FilterPanel value={filters} onChange={setFilters} facets={catalog?.facets ?? null} />
     </SetupLayout>
   );
 }

@@ -36,7 +36,9 @@ export interface GameScreenProps {
   rival?: number | null;
   onFinished?: (outcomes: ScoredOutcome[], score: number) => void;
   onAgain?: () => void;
-  againLabel?: string;
+  /** Back to the setup screen (filters, artists); without it the back arrow goes home. */
+  onExit?: () => void;
+  exitLabel?: string;
   /** Extra controls in the top bar (filters button in free mode). */
   toolbar?: ReactNode;
   /** Shown under the title (active filters, artists). */
@@ -72,7 +74,6 @@ export function GameScreen(props: GameScreenProps) {
   // Start once on mount; the page remounts this component for a new configuration.
   const { start } = session;
   useEffect(() => {
-    window.scrollTo({ top: 0 });
     void start();
   }, [start]);
 
@@ -93,7 +94,6 @@ export function GameScreen(props: GameScreenProps) {
       window.scrollTo({ top: 0 });
       return;
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
     void session.next();
   }, [counted, session]);
 
@@ -135,15 +135,22 @@ export function GameScreen(props: GameScreenProps) {
 
   const isLastStage = round.unlocked >= stages.length - 1;
   const triedTitles = round.attempts.filter((a) => a.guess).map((a) => `${a.guess!.title}::${a.guess!.artist}`);
-  const shownSeconds = revealed ? stages[outcome?.stage ?? round.unlocked] : stages[round.unlocked];
+
+  const back = props.onExit ? (
+    <button type="button" className="icon-btn -ml-2" aria-label={props.exitLabel ?? "Volver"} onClick={props.onExit}>
+      <Icon name="back" className="size-6" />
+    </button>
+  ) : (
+    <Link href="/" className="icon-btn -ml-2" aria-label="Volver al inicio">
+      <Icon name="back" className="size-6" />
+    </Link>
+  );
 
   const topBar = (
-    <header className="flex h-16 items-center justify-between gap-2">
-      <Link href="/" className="icon-btn -ml-2" aria-label="Volver al inicio">
-        <Icon name="back" className="size-6" />
-      </Link>
+    <header className="flex h-14 items-center justify-between gap-2">
+      {back}
       <div className="min-w-0 flex-1">
-        <p className="truncate font-bold wide">{props.title}</p>
+        <p className="truncate font-bold wide leading-tight">{props.title}</p>
         {props.subtitle && <div className="truncate text-sm text-ink-3">{props.subtitle}</div>}
       </div>
       {props.toolbar}
@@ -157,9 +164,9 @@ export function GameScreen(props: GameScreenProps) {
   const freeStreak = session.freeStreak;
   if (showSummary && summary) {
     return (
-      <main className="mx-auto w-full max-w-xl px-[var(--gutter)] pb-16">
+      <main className="mx-auto w-full max-w-xl px-[var(--gutter)] pb-12">
         {topBar}
-        <div className="pt-6">
+        <div className="pt-4">
           <GameSummary
             heading={props.summaryHeading ?? props.title}
             outcomes={session.outcomes}
@@ -169,7 +176,8 @@ export function GameScreen(props: GameScreenProps) {
             challengeUrl={props.challengeUrl}
             rival={props.rival}
             onAgain={props.onAgain}
-            againLabel={props.againLabel}
+            onChange={props.onExit}
+            changeLabel={props.exitLabel}
           />
         </div>
         <HelpSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
@@ -178,10 +186,10 @@ export function GameScreen(props: GameScreenProps) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-xl px-[var(--gutter)] pb-16">
+    <main className="mx-auto w-full max-w-xl px-[var(--gutter)] pb-10">
       {topBar}
 
-      <div className="flex min-h-7 items-center justify-between gap-3 text-sm font-semibold text-ink-2">
+      <div className="flex min-h-6 items-center justify-between gap-3 text-sm font-semibold text-ink-2">
         {counted ? (
           <>
             <span>
@@ -209,7 +217,7 @@ export function GameScreen(props: GameScreenProps) {
       </div>
 
       {session.error ? (
-        <div className="mt-10 rounded-3xl bg-surface p-6">
+        <div className="mt-8 rounded-3xl bg-surface p-6">
           <Icon name="danger" className="size-7 text-miss" />
           <p className="mt-3 text-lg font-bold wide">{session.error}</p>
           <div className="mt-5 flex flex-wrap gap-3">
@@ -223,73 +231,59 @@ export function GameScreen(props: GameScreenProps) {
             >
               Intentar de nuevo
             </button>
-            <Link href="/" className="btn btn-ghost">
-              Inicio
-            </Link>
+            {props.onExit ? (
+              <button type="button" className="btn btn-ghost" onClick={props.onExit}>
+                {props.exitLabel ?? "Volver"}
+              </button>
+            ) : (
+              <Link href="/" className="btn btn-ghost">
+                Inicio
+              </Link>
+            )}
           </div>
         </div>
       ) : (
         <>
-          <section className="mt-6" data-keep-search>
-            <div className="flex items-end justify-between gap-4">
-              <p
-                className={`display text-[clamp(5.5rem,30vw,10rem)] transition-colors ${
-                  round.phase === "won" ? "text-ok" : round.phase === "lost" ? "text-miss" : ""
-                }`}
-                aria-live="polite"
-              >
-                {shownSeconds}
-                <span className="text-[0.42em] tracking-[-0.02em]">s</span>
-              </p>
-              <p className="mb-2 text-right text-sm text-ink-3">
-                {revealed ? (
-                  round.phase === "won" ? "adivinada" : "no adivinada"
-                ) : (
-                  <>
-                    Pista <span className="font-bold text-ink">{round.unlocked + 1}</span> de {stages.length}
-                  </>
-                )}
-              </p>
-            </div>
+          <section className="mt-4" data-keep-search>
+            <StageRuler
+              stages={stages}
+              unlocked={round.unlocked}
+              attempts={round.attempts}
+              playback={playback}
+              peaks={round.peaks}
+              revealed={revealed}
+              onSelect={(i) => play(i)}
+            />
 
-            <div className="mt-6">
-              <StageRuler
-                stages={stages}
-                unlocked={round.unlocked}
-                attempts={round.attempts}
-                playback={playback}
-                peaks={round.peaks}
-                revealed={revealed}
-                onSelect={(i) => play(i)}
-              />
-            </div>
-
-            <div className="mt-5 flex items-center gap-4">
+            <div className="mt-4 flex items-center gap-4">
               <PlayButton
                 playback={playback}
                 loading={round.phase === "loading"}
                 disabled={round.phase === "error"}
-                onPlay={() => play(revealed ? undefined : round.listening)}
+                onPlay={() => play(round.listening)}
               />
               <div className="min-w-0 flex-1">
-                <p className="font-bold wide">
-                  {round.phase === "loading"
-                    ? "Cargando canción…"
-                    : revealed
-                      ? "Escuchar la canción"
-                      : `Escuchar ${stages[round.listening]}s`}
+                <p className="display text-[2.6rem] leading-none">
+                  {stages[round.listening]}
+                  <span className="text-[0.5em] tracking-[-0.02em]">s</span>
                 </p>
-                <p className="hidden text-sm text-ink-3 sm:block">
-                  <span className="kbd">Espacio</span> o <span className="kbd">Ctrl</span> + <span className="kbd">Espacio</span> al escribir
+                <p className="mt-1 text-sm text-ink-3">
+                  {round.phase === "loading" ? (
+                    "Cargando canción…"
+                  ) : (
+                    <>
+                      Pista <span className="font-bold text-ink">{round.unlocked + 1}</span> de {stages.length}
+                    </>
+                  )}
                 </p>
               </div>
               <VolumeControl initial={volume} />
             </div>
           </section>
 
-          {session.notice && <p className="mt-6 rounded-2xl bg-indigo-night/60 px-4 py-3 text-sm text-indigo-soft">{session.notice}</p>}
+          {session.notice && <p className="mt-4 rounded-2xl bg-indigo-night/60 px-4 py-3 text-sm text-indigo-soft">{session.notice}</p>}
 
-          <div className="mt-8">
+          <div className="mt-6">
             {round.phase === "error" ? (
               <div className="rounded-3xl bg-surface p-5">
                 <p className="font-semibold">No se pudo cargar el audio de esta canción.</p>
@@ -304,20 +298,6 @@ export function GameScreen(props: GameScreenProps) {
                   )}
                 </div>
               </div>
-            ) : revealed && outcome ? (
-              <RevealPanel
-                won={round.phase === "won"}
-                stageSeconds={stages[outcome.stage]}
-                track={round.track}
-                revealFailed={round.revealFailed}
-                points={outcome.points}
-                multiplier={outcome.multiplier}
-                showPoints={counted}
-                guessedArtist={round.attempts.find((a) => a.kind === "correct")?.guess?.artist}
-                onRetryReveal={round.retryReveal}
-                onNext={goNext}
-                nextLabel={counted && session.isLast ? "Ver resultado" : "Siguiente canción"}
-              />
             ) : (
               <>
                 <SearchBox
@@ -335,7 +315,7 @@ export function GameScreen(props: GameScreenProps) {
                   <button
                     type="button"
                     onClick={() => void session.reroll()}
-                    className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-ink-3 hover:text-ink"
+                    className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-ink-3 hover:text-ink"
                   >
                     <Icon name="refresh" className="size-4" />
                     Cambiar de canción
@@ -345,6 +325,24 @@ export function GameScreen(props: GameScreenProps) {
             )}
           </div>
         </>
+      )}
+
+      {revealed && outcome && (
+        <RevealPanel
+          won={round.phase === "won"}
+          stageSeconds={stages[outcome.stage]}
+          track={round.track}
+          revealFailed={round.revealFailed}
+          points={outcome.points}
+          multiplier={outcome.multiplier}
+          showPoints={counted}
+          guessedArtist={round.attempts.find((a) => a.kind === "correct")?.guess?.artist}
+          playback={playback}
+          onPlay={() => play()}
+          onRetryReveal={round.retryReveal}
+          onNext={goNext}
+          nextLabel={counted && session.isLast ? "Ver resultado" : "Siguiente canción"}
+        />
       )}
 
       <HelpSheet open={helpOpen} onClose={() => setHelpOpen(false)} />

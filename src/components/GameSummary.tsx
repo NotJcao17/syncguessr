@@ -17,7 +17,8 @@ export function GameSummary({
   challengeUrl,
   rival,
   onAgain,
-  againLabel,
+  onChange,
+  changeLabel,
 }: {
   heading: string;
   outcomes: ScoredOutcome[];
@@ -30,7 +31,9 @@ export function GameSummary({
   /** Score the player was challenged to beat. */
   rival?: number | null;
   onAgain?: () => void;
-  againLabel?: string;
+  /** Back to the setup screen to pick other filters or artists. */
+  onChange?: () => void;
+  changeLabel?: string;
 }) {
   const [toast, setToast] = useState<string | null>(null);
   const stages = outcomes.map((o) => (o.won ? o.stage : null));
@@ -58,7 +61,7 @@ export function GameSummary({
   return (
     <section className="animate-rise">
       <p className="eyebrow">{heading}</p>
-      <p className="display mt-3 text-[clamp(4.5rem,22vw,8.5rem)]">{formatPoints(score)}</p>
+      <p className="display mt-3 text-[clamp(3.5rem,16vw,6rem)]">{formatPoints(score)}</p>
       <p className="mt-2 text-lg font-bold wide text-ink-2">
         puntos · {solved} de {outcomes.length} canciones
       </p>
@@ -87,7 +90,7 @@ export function GameSummary({
         )}
       </div>
 
-      <ol className="mt-8 divide-y divide-line/50">
+      <ol className="mt-6 divide-y divide-line/50">
         {outcomes.map((o, i) => (
           <li key={i} className="flex items-center gap-3 py-3">
             {o.track ? (
@@ -112,9 +115,15 @@ export function GameSummary({
 
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
         {onAgain && (
-          <button type="button" onClick={onAgain} className="btn btn-light sm:col-span-2">
+          <button type="button" onClick={onAgain} className="btn btn-light">
             <Icon name="restart" className="size-5" />
-            {againLabel ?? "Jugar otra"}
+            Jugar otra
+          </button>
+        )}
+        {onChange && (
+          <button type="button" onClick={onChange} className="btn btn-ghost">
+            <Icon name="filters" className="size-5" />
+            {changeLabel ?? "Cambiar"}
           </button>
         )}
         {challengeUrl && (
@@ -127,7 +136,7 @@ export function GameSummary({
           <Icon name="share" className="size-5" />
           Compartir resultado
         </button>
-        <Link href="/" className="btn btn-ghost sm:col-span-2">
+        <Link href="/" className="btn btn-ghost">
           <Icon name="home" className="size-5" />
           Inicio
         </Link>

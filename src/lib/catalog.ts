@@ -81,18 +81,15 @@ export function eligibleTracks(source: Source): Track[] {
   return tracks.filter((t) => matchesFilters(t, f));
 }
 
-/** Picks an artist first and then one of their songs, so prolific artists don't dominate. */
+/**
+ * Any song of the pool with the same chance, skipping the artists heard in the last few rounds.
+ * (Picking an artist first gave a one-hit artist the same weight as Bad Bunny, which filled
+ * games with deep cuts.)
+ */
 function pickDiverse(pool: Track[], rand: () => number, avoidArtists: Set<string>): Track {
-  const byArtist = new Map<string, Track[]>();
-  for (const t of pool) {
-    const list = byArtist.get(t.artist);
-    if (list) list.push(t);
-    else byArtist.set(t.artist, [t]);
-  }
-  let artists = [...byArtist.keys()].filter((a) => !avoidArtists.has(a));
-  if (artists.length === 0) artists = [...byArtist.keys()];
-  const songs = byArtist.get(artists[Math.floor(rand() * artists.length)])!;
-  return songs[Math.floor(rand() * songs.length)];
+  const allowed = pool.filter((t) => !avoidArtists.has(t.artist));
+  const from = allowed.length ? allowed : pool;
+  return from[Math.floor(rand() * from.length)];
 }
 
 export function pickRound(
@@ -109,9 +106,15 @@ export function pickRound(
   return { track, recycled };
 }
 
-/** Deterministic game: the same seed and source always give the same songs in the same order. */
-export function pickGame(source: Source, count: number, seed: string): Track[] {
-  const pool = eligibleTracks(source).sort((a, b) => a.id - b.id);
+/**
+ * Deterministic game: the same seed, source and exclusions always give the same songs in the same
+ * order. Recently heard songs are skipped while the pool still has enough without them.
+ */
+export function pickGame(source: Source, count: number, seed: string, exclude: number[] = []): Track[] {
+  const all = eligibleTracks(source).sort((a, b) => a.id - b.id);
+  const excluded = new Set(exclude);
+  const fresh = all.filter((t) => !excluded.has(t.id));
+  const pool = fresh.length >= count ? fresh : all;
   const rand = seededRandom(seed);
   const chosen: Track[] = [];
   const recentArtists: string[] = [];
@@ -157,7 +160,15 @@ export function searchTracks(
     return b.t.rank - a.t.rank;
   });
 
-  return scored.slice(0, limit).map(({ t }) => ({ id: t.id, title: t.title, artist: t.artist, cover: t.cover }));
+  // One entry per song and artist, even if two releases slipped into the catalog.
+  const seen = new Set<string>();
+  const unique = scored.filter(({ t }) => {
+    const key = `${titleKey(t.title)}::${t.artist}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.slice(0, limit).map(({ t }) => ({ id: t.id, title: t.title, artist: t.artist, cover: t.cover }));
 }
 
 export function searchArtists(query: string, limit = 12): ArtistResult[] {

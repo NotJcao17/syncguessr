@@ -32,6 +32,28 @@ async function getJson(url, headers = {}, tries = 5) {
   return null;
 }
 
+/**
+ * Runs `job` for every item, starting at most one every `gapMs` and keeping up to `inFlight` running.
+ * MusicBrainz allows one request per second but answers slowly, so waiting for each reply wastes the budget.
+ */
+async function throttled(items, job, { gapMs = 1100, inFlight = 4, onProgress } = {}) {
+  let next = 0;
+  let done = 0;
+  const running = new Set();
+  while (next < items.length || running.size) {
+    if (next < items.length && running.size < inFlight) {
+      const p = job(items[next++]).finally(() => {
+        running.delete(p);
+        onProgress?.(++done);
+      });
+      running.add(p);
+      await sleep(gapMs);
+    } else {
+      await Promise.race(running);
+    }
+  }
+}
+
 const tracks = JSON.parse(readFileSync(`${CACHE}/deduped.json`, "utf8"));
 const keyOf = (t) => `${t.songKey}::${artistKey(t.artist)}`;
 const present = new Map(tracks.map((t) => [keyOf(t), t]));
@@ -88,7 +110,8 @@ console.log(`iconic added: ${added.length}`);
 
 // --- 2b. Deezer metadata (rank, availability, release date) ----------------
 const deezer = load("deezer.json", {});
-const pendingDz = tracks.filter((t) => !(t.id in deezer));
+// Songs from the expansion already carry rank and availability from the artist's top list.
+const pendingDz = tracks.filter((t) => !t.fromTop && !(t.id in deezer));
 console.log(`deezer lookups pending: ${pendingDz.length}`);
 for (let i = 0; i < pendingDz.length; i += 8) {
   const batch = pendingDz.slice(i, i + 8);
@@ -118,15 +141,19 @@ for (const t of tracks) {
   byArtist.get(t.artist).push(t);
 }
 const queue = [];
-for (const [artist, list] of byArtist) for (let i = 0; i < list.length; i += 4) queue.push([artist, list.slice(i, i + 4)]);
+for (const [artist, list] of byArtist) for (let i = 0; i < list.length; i += 6) queue.push([artist, list.slice(i, i + 6)]);
 console.log(`musicbrainz queries pending: ${queue.length}`);
 
 const phrase = (s) => `"${s.replace(/[\\"]/g, " ").trim()}"`;
 const bare = (title) => displayTitle(title).replace(/[\(\[][^\)\]]*[\)\]]/g, "").replace(/\s[-–]\s.*$/, "").trim() || title;
 
-let n = 0;
-for (const [artist, list] of queue) {
-  const started = Date.now();
+const progress = (label, total, every) => (n) => {
+  if (n % every === 0) {
+    save("musicbrainz.json", mb);
+    console.log(`  ${label} ${n}/${total}`);
+  }
+};
+await throttled(queue, async ([artist, list]) => {
   const query = `artist:${phrase(artist)} AND (${list.map((t) => `recording:${phrase(bare(t.title))}`).join(" OR ")})`;
   const res = await getJson(`https://musicbrainz.org/ws/2/recording?fmt=json&limit=100&query=${encodeURIComponent(query)}`);
   const aKey = artistKey(artist);
@@ -141,22 +168,15 @@ for (const [artist, list] of queue) {
     }
     mb[keyOf(t)] = res ? year : undefined;
   }
-  if (++n % 50 === 0) {
-    save("musicbrainz.json", mb);
-    console.log(`  musicbrainz ${n}/${queue.length}`);
-  }
-  await sleep(Math.max(0, 1100 - (Date.now() - started)));
-}
+}, { onProgress: progress("musicbrainz", queue.length, 50) });
 save("musicbrainz.json", mb);
 
 // --- 2d. Second pass, one song per query, for well-known songs the batches missed ---
 // Heavily recorded songs (Thriller, Beat It) fill the 100 batch results with other recordings.
 const retryKey = (t) => `retry:${keyOf(t)}`;
-const misses = tracks.filter((t) => mb[keyOf(t)] === null && t.rank >= 450000 && !(retryKey(t) in mb));
+const misses = tracks.filter((t) => mb[keyOf(t)] === null && t.rank >= 600000 && !(retryKey(t) in mb));
 console.log(`musicbrainz single retries pending: ${misses.length}`);
-n = 0;
-for (const t of misses) {
-  const started = Date.now();
+await throttled(misses, async (t) => {
   const query = `artist:${phrase(t.artist)} AND recording:${phrase(bare(t.title))} AND status:official`;
   const res = await getJson(`https://musicbrainz.org/ws/2/recording?fmt=json&limit=100&query=${encodeURIComponent(query)}`);
   const aKey = artistKey(t.artist);
@@ -172,23 +192,16 @@ for (const t of misses) {
     mb[keyOf(t)] = year;
     mb[retryKey(t)] = true;
   }
-  if (++n % 50 === 0) {
-    save("musicbrainz.json", mb);
-    console.log(`  musicbrainz retry ${n}/${misses.length}`);
-  }
-  await sleep(Math.max(0, 1100 - (Date.now() - started)));
-}
+}, { onProgress: progress("musicbrainz retry", misses.length, 50) });
 save("musicbrainz.json", mb);
 
 // --- 2e. Hits get their own query too: in a shared batch the original recording can fall outside
 // the top 100 and a later reissue sets the year (Hotel California came out as 1994).
 const hits = tracks.filter(
-  (t) => (t.rank >= 700000 || t.iconic) && !(retryKey(t) in mb) && !(`exact:${keyOf(t)}` in mb)
+  (t) => (t.rank >= 850000 || t.iconic) && !(retryKey(t) in mb) && !(`exact:${keyOf(t)}` in mb)
 );
 console.log(`musicbrainz hit refinements pending: ${hits.length}`);
-n = 0;
-for (const t of hits) {
-  const started = Date.now();
+await throttled(hits, async (t) => {
   const query = `artist:${phrase(t.artist)} AND recording:${phrase(bare(t.title))}`;
   const res = await getJson(`https://musicbrainz.org/ws/2/recording?fmt=json&limit=100&query=${encodeURIComponent(query)}`);
   const aKey = artistKey(t.artist);
@@ -205,12 +218,25 @@ for (const t of hits) {
     mb[keyOf(t)] = year === null ? prev ?? null : prev ? Math.min(prev, year) : year;
     mb[`exact:${keyOf(t)}`] = true;
   }
-  if (++n % 100 === 0) {
-    save("musicbrainz.json", mb);
-    console.log(`  musicbrainz hits ${n}/${hits.length}`);
-  }
-  await sleep(Math.max(0, 1100 - (Date.now() - started)));
-}
+}, { onProgress: progress("musicbrainz hits", hits.length, 100) });
 save("musicbrainz.json", mb);
+
+// --- 2f. Album release dates for expansion songs MusicBrainz could not date ----------
+const albums = load("albums.json", {});
+const undated = [...new Set(tracks.filter((t) => t.fromTop && t.albumId && !mb[keyOf(t)]).map((t) => t.albumId))].filter(
+  (id) => !(id in albums)
+);
+console.log(`album lookups pending: ${undated.length}`);
+for (let i = 0; i < undated.length; i += 8) {
+  await Promise.all(
+    undated.slice(i, i + 8).map(async (id) => {
+      const a = await getJson(`https://api.deezer.com/album/${id}`);
+      albums[id] = a && !a.error ? { release: a.release_date, type: a.record_type } : null;
+    })
+  );
+  if (i % 400 === 0) save("albums.json", albums);
+  await sleep(900);
+}
+save("albums.json", albums);
 save("enriched.json", tracks);
 console.log("done");

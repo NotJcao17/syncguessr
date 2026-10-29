@@ -1,6 +1,9 @@
 /** Clip lengths in seconds, shortest first. Every mode uses the same five so scores stay comparable. */
 export const STAGES = [0.1, 0.5, 2, 8, 15] as const;
 
+/** Songs in every scored game (daily, partida, artist). */
+export const GAME_LENGTH = 5;
+
 /** Base points for solving at each stage. */
 export const STAGE_POINTS = [1000, 800, 600, 400, 200] as const;
 

@@ -9,7 +9,7 @@ const SHORTCUTS: [string, string][] = [
   ["/", "Ir al buscador"],
   ["↑ ↓ y Enter", "Elegir canción y adivinar"],
   ["S", "Saltar a la siguiente pista"],
-  ["N", "Siguiente canción al terminar"],
+  ["N o Enter", "Siguiente canción al terminar"],
 ];
 
 export function HelpSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -20,8 +20,8 @@ export function HelpSheet({ open, onClose }: { open: boolean; onClose: () => voi
           <strong className="text-ink">Escucha.</strong> Empiezas con una décima de segundo de la canción.
         </li>
         <li>
-          <strong className="text-ink">Busca y adivina.</strong> Escribe el título o el artista y elige de la lista. Solo
-          aparecen canciones del catálogo, sin covers ni versiones repetidas.
+          <strong className="text-ink">Busca y adivina.</strong> Escribe el título o el artista y elige de la lista. Si
+          eliges otra versión de la misma canción, también cuenta.
         </li>
         <li>
           <strong className="text-ink">Cada fallo o salto abre un fragmento más largo:</strong>{" "}

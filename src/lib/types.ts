@@ -74,7 +74,6 @@ export interface RevealedTrack {
   cover: string;
   coverXl: string;
   year: number;
-  deezerUrl: string;
 }
 
 export interface VerifyResponse {

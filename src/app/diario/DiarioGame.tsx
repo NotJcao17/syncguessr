@@ -6,11 +6,11 @@ import { GameScreen } from "@/components/GameScreen";
 import { Icon } from "@/components/Icon";
 import { DAILY_FILTERS } from "@/lib/filters";
 import { dayLabel as dailyLabel, todayKey } from "@/lib/rng";
-import { STAGES, formatPoints } from "@/lib/scoring";
+import { GAME_LENGTH, STAGES, formatPoints } from "@/lib/scoring";
 import { resultGrid, shareOrCopy, shareText } from "@/lib/share";
 import { DailyResult, loadDaily, loadStats, saveDaily } from "@/lib/storage";
 
-const DAILY_COUNT = 5;
+const DAILY_COUNT = GAME_LENGTH;
 
 
 function untilMidnight() {

@@ -24,6 +24,9 @@ export interface SessionConfig {
   count: number | null;
   /** Fixed games only: same seed, same songs. */
   seed?: string;
+  /** Fixed games: skip songs the player heard recently. Off for daily games and challenges,
+   * which must give everyone the same songs. */
+  avoidRepeats?: boolean;
   /** Fixed games: where the high score is kept. */
   recordKey?: string;
   /** Fixed games: called once when the last round ends. */
@@ -68,6 +71,7 @@ export function useGameSession(config: SessionConfig) {
   });
 
   const failedRef = useRef<string[]>([]);
+  const sparesRef = useRef<RoundTicket[]>([]);
   const recentArtistsRef = useRef<string[]>([]);
   const nextTicketRef = useRef<Promise<RoundTicket | null> | null>(null);
   const configRef = useRef(config);
@@ -97,17 +101,23 @@ export function useGameSession(config: SessionConfig) {
     setStreak(0);
     setTickets([]);
     nextTicketRef.current = null;
-    const { count, source, seed } = configRef.current;
+    const { count, source, seed, avoidRepeats } = configRef.current;
     if (count === null) {
       const ticket = await fetchEndlessTicket();
       if (ticket) setTickets([ticket]);
     } else {
-      const res = await postJson<{ rounds: RoundTicket[] }>("/api/game", { source, count, seed });
+      const res = await postJson<{ rounds: RoundTicket[]; spares?: RoundTicket[] }>("/api/game", {
+        source,
+        count,
+        seed,
+        exclude: avoidRepeats ? loadHistory() : [],
+      });
       if (!res.ok) {
         setError(res.error);
         return;
       }
       setTickets(res.data.rounds);
+      sparesRef.current = res.data.spares ?? [];
     }
     setStarted(true);
   }, [fetchEndlessTicket]);
@@ -187,10 +197,16 @@ export function useGameSession(config: SessionConfig) {
     if (t) setTickets((prev) => [...prev.slice(0, -1), t]);
   }, [fetchEndlessTicket]);
 
-  /** Audio for this round could not be loaded. */
+  /** Audio for this round could not be loaded: swap in another song before the player acts. */
   const handleLoadError = useCallback(async () => {
     if (!ticket) return;
-    if (configRef.current.count === null && failedRef.current.length < MAX_LOAD_RETRIES * 4) {
+    if (configRef.current.count !== null) {
+      // Fixed games carry spare songs from the same seed, so a daily game stays the same for everyone.
+      const spare = sparesRef.current.shift();
+      if (spare) setTickets((prev) => prev.map((t, i) => (i === index ? spare : t)));
+      return;
+    }
+    if (failedRef.current.length < MAX_LOAD_RETRIES * 4) {
       failedRef.current = [...failedRef.current, ticket.token];
       const recentFailures = failedRef.current.length;
       if (recentFailures % MAX_LOAD_RETRIES === 0) {
@@ -199,7 +215,7 @@ export function useGameSession(config: SessionConfig) {
       }
       await reroll();
     }
-  }, [ticket, reroll]);
+  }, [ticket, index, reroll]);
 
   const score = outcomes.reduce((sum, o) => sum + o.points, 0);
 

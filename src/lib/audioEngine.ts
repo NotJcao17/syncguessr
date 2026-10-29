@@ -98,15 +98,20 @@ class AudioEngine {
     const cached = this.cache.get(url);
     if (cached) return cached;
     const promise = (async () => {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const bytes = await res.arrayBuffer();
-        const buffer = await this.ensureContext().decodeAudioData(bytes);
-        return { buffer, onset: findOnset(buffer) };
-      } catch {
-        return null;
+      // One retry: a cold server or a rate-limited Deezer often answers the second time.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 1200));
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const bytes = await res.arrayBuffer();
+          const buffer = await this.ensureContext().decodeAudioData(bytes);
+          return { buffer, onset: findOnset(buffer) };
+        } catch {
+          // try again
+        }
       }
+      return null;
     })();
     this.cache.set(url, promise);
     promise.then((r) => {
