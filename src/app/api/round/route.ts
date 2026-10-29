@@ -2,14 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRandomTrack } from "@/lib/catalog";
 import { Language, Genre, Era, Difficulty, RoundResponse } from "@/lib/types";
 
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const language = (searchParams.get("language") || "all") as Language;
-    const genre = (searchParams.get("genre") || "all") as Genre;
-    const era = (searchParams.get("era") || "all") as Era;
-    const difficulty = (searchParams.get("difficulty") || "all") as Difficulty;
+
+    // Multi-select or single fallback
+    const genresParam = searchParams.get("genres") || searchParams.get("genre") || "";
+    const genres =
+      genresParam && genresParam !== "all"
+        ? (genresParam.split(",").map((s) => s.trim()).filter(Boolean) as Genre[])
+        : [];
+
+    const erasParam = searchParams.get("eras") || searchParams.get("era") || "";
+    const eras =
+      erasParam && erasParam !== "all"
+        ? (erasParam.split(",").map((s) => s.trim()).filter(Boolean) as Era[])
+        : [];
+
+    const diffsParam = searchParams.get("difficulties") || searchParams.get("difficulty") || "";
+    const difficulties =
+      diffsParam && diffsParam !== "all"
+        ? (diffsParam.split(",").map((s) => s.trim()).filter(Boolean) as Difficulty[])
+        : [];
 
     const excludeArtist = searchParams.get("excludeArtist") || "";
     const excludeParam = searchParams.get("exclude") || "";
@@ -20,7 +35,14 @@ export async function GET(request: NextRequest) {
           .filter((id) => !isNaN(id))
       : [];
 
-    const track = getRandomTrack({ language, genre, era, difficulty, excludeIds, excludeArtist });
+    const track = getRandomTrack({
+      language,
+      genres,
+      eras,
+      difficulties,
+      excludeIds,
+      excludeArtist,
+    });
 
     if (!track) {
       return NextResponse.json({ error: "No track found for criteria" }, { status: 404 });

@@ -18,6 +18,9 @@ import {
   StageStatus,
   RoundResponse,
   VerifyResponse,
+  ALL_GENRES,
+  ALL_ERAS,
+  ALL_DIFFICULTIES,
 } from "@/lib/types";
 
 const DEFAULT_STAGES: StageConfig[] = [
@@ -29,11 +32,11 @@ const DEFAULT_STAGES: StageConfig[] = [
 ];
 
 export default function GamePage() {
-  // Settings & Filters
+  // Settings & Filters (Multi-select)
   const [language, setLanguage] = useState<Language>("all");
-  const [genre, setGenre] = useState<Genre>("all");
-  const [era, setEra] = useState<Era>("all");
-  const [difficulty, setDifficulty] = useState<Difficulty>("all");
+  const [genres, setGenres] = useState<Genre[]>(() => ALL_GENRES.map((g) => g.id));
+  const [eras, setEras] = useState<Era[]>(() => ALL_ERAS.map((e) => e.id));
+  const [difficulties, setDifficulties] = useState<Difficulty[]>(() => ALL_DIFFICULTIES.map((d) => d.id));
   const [stages, setStages] = useState<StageConfig[]>(DEFAULT_STAGES);
 
   // Modals
@@ -79,6 +82,24 @@ export default function GamePage() {
         setLanguage(savedLang);
       }
 
+      const savedGenres = localStorage.getItem("syncguessr_genres");
+      if (savedGenres) {
+        const parsed = JSON.parse(savedGenres);
+        if (Array.isArray(parsed) && parsed.length > 0) setGenres(parsed);
+      }
+
+      const savedEras = localStorage.getItem("syncguessr_eras");
+      if (savedEras) {
+        const parsed = JSON.parse(savedEras);
+        if (Array.isArray(parsed) && parsed.length > 0) setEras(parsed);
+      }
+
+      const savedDiffs = localStorage.getItem("syncguessr_diffs");
+      if (savedDiffs) {
+        const parsed = JSON.parse(savedDiffs);
+        if (Array.isArray(parsed) && parsed.length > 0) setDifficulties(parsed);
+      }
+
       const savedPlayed = localStorage.getItem("syncguessr_history");
       if (savedPlayed) {
         const parsed = JSON.parse(savedPlayed);
@@ -114,7 +135,12 @@ export default function GamePage() {
 
   // Fetch a new round cleanly
   const startNewRound = useCallback(
-    async (overrideLang?: Language) => {
+    async (overrides?: {
+      language?: Language;
+      genres?: Genre[];
+      eras?: Era[];
+      difficulties?: Difficulty[];
+    }) => {
       const seq = ++roundSeqRef.current;
 
       audioEngine.stop();
@@ -128,15 +154,18 @@ export default function GamePage() {
       setStageStatuses(["active", "locked", "locked", "locked", "locked"]);
       setIsLoadingAudio(true);
 
-      const langToUse = overrideLang || language;
+      const langToUse = overrides?.language || language;
+      const genresToUse = overrides?.genres || genres;
+      const erasToUse = overrides?.eras || eras;
+      const diffsToUse = overrides?.difficulties || difficulties;
       const excludeParam = playedIds.slice(-200).join(",");
 
       try {
         const queryParams = new URLSearchParams({
           language: langToUse,
-          genre,
-          era,
-          difficulty,
+          genres: genresToUse.join(","),
+          eras: erasToUse.join(","),
+          difficulties: diffsToUse.join(","),
           exclude: excludeParam,
         });
         if (lastArtistRef.current) {
@@ -152,7 +181,7 @@ export default function GamePage() {
 
         // Preload audio into memory buffer via Web Audio API, verifying trackId
         const loaded = await audioEngine.loadAudio(roundData.previewUrl, roundData.trackId);
-        
+
         // Discard if another round request occurred during audio decode
         if (seq !== roundSeqRef.current) return;
 
@@ -160,7 +189,7 @@ export default function GamePage() {
           setCurrentRound(roundData);
         } else {
           console.warn("Could not load preview, retrying new round...");
-          startNewRound(langToUse);
+          startNewRound(overrides);
         }
       } catch (err) {
         console.error("Error starting new round:", err);
@@ -170,27 +199,52 @@ export default function GamePage() {
         }
       }
     },
-    [language, genre, era, difficulty, playedIds]
+    [language, genres, eras, difficulties, playedIds]
   );
 
-  // Initial round start — runs once and when filters change
+  // Initial round start — runs once on mount
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
       startNewRound();
-      return;
     }
-    startNewRound();
-  }, [language, genre, era, difficulty]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startNewRound]);
 
-  // Language Change Handler
+  // Language Change Handler from Navbar
   const handleLanguageChange = (newLang: Language) => {
     if (newLang === language) return;
     setLanguage(newLang);
     try {
       localStorage.setItem("syncguessr_lang", newLang);
     } catch {}
-    startNewRound(newLang);
+    startNewRound({ language: newLang });
+  };
+
+  // Apply filters from modal
+  const handleApplyFilters = (newFilters: {
+    language: Language;
+    genres: Genre[];
+    eras: Era[];
+    difficulties: Difficulty[];
+  }) => {
+    setLanguage(newFilters.language);
+    setGenres(newFilters.genres);
+    setEras(newFilters.eras);
+    setDifficulties(newFilters.difficulties);
+
+    try {
+      localStorage.setItem("syncguessr_lang", newFilters.language);
+      localStorage.setItem("syncguessr_genres", JSON.stringify(newFilters.genres));
+      localStorage.setItem("syncguessr_eras", JSON.stringify(newFilters.eras));
+      localStorage.setItem("syncguessr_diffs", JSON.stringify(newFilters.difficulties));
+    } catch {}
+
+    startNewRound({
+      language: newFilters.language,
+      genres: newFilters.genres,
+      eras: newFilters.eras,
+      difficulties: newFilters.difficulties,
+    });
   };
 
   // Play current segment
@@ -343,6 +397,25 @@ export default function GamePage() {
 
   const activeStage = stages[currentStageIdx] || stages[0];
 
+  const hasCustomFilters =
+    genres.length < ALL_GENRES.length ||
+    eras.length < ALL_ERAS.length ||
+    difficulties.length < ALL_DIFFICULTIES.length;
+
+  const filterSummary = [
+    genres.length < ALL_GENRES.length
+      ? `${genres.length} género${genres.length > 1 ? "s" : ""}`
+      : null,
+    eras.length < ALL_ERAS.length
+      ? `${eras.length} época${eras.length > 1 ? "s" : ""}`
+      : null,
+    difficulties.length < ALL_DIFFICULTIES.length
+      ? `${difficulties.length} dificultad${difficulties.length > 1 ? "es" : ""}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
   return (
     <div className="flex min-h-screen flex-col bg-night text-ink">
       {/* Top Navigation */}
@@ -368,6 +441,19 @@ export default function GamePage() {
           <p className="mt-1 text-xs font-bold uppercase tracking-widest text-ink-3">
             Adivina la canción desde {activeStage.duration}s
           </p>
+
+          {/* Active custom filter chip */}
+          {hasCustomFilters && (
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-indigo/40 bg-indigo-deep/40 px-3.5 py-1 text-xs font-semibold text-ink-2 hover:border-indigo hover:text-ink transition-colors shadow-sm"
+              title="Haz clic para modificar los filtros"
+            >
+              <span className="text-indigo">⚡ Filtros:</span>
+              <span>{filterSummary}</span>
+            </button>
+          )}
         </div>
 
         {/* Stage Timeline (0.1s, 0.5s, 2s, 8s, 15s) */}
@@ -429,25 +515,17 @@ export default function GamePage() {
         onClose={() => setIsSettingsOpen(false)}
         language={language}
         onLanguageChange={handleLanguageChange}
-        genre={genre}
-        onGenreChange={(g) => {
-          setGenre(g);
-          startNewRound();
-        }}
-        era={era}
-        onEraChange={(e) => {
-          setEra(e);
-          startNewRound();
-        }}
-        difficulty={difficulty}
-        onDifficultyChange={(d) => {
-          setDifficulty(d);
-          startNewRound();
-        }}
+        selectedGenres={genres}
+        onGenresChange={setGenres}
+        selectedEras={eras}
+        onErasChange={setEras}
+        selectedDifficulties={difficulties}
+        onDifficultiesChange={setDifficulties}
         stages={stages}
         onToggleStage={handleToggleStage}
         onResetHistory={handleResetHistory}
         historyCount={playedIds.length}
+        onApplyFilters={handleApplyFilters}
       />
 
       {/* Help Modal */}

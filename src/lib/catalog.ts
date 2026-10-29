@@ -3,14 +3,20 @@ import { Track, Language, Genre, Era, Difficulty } from "./types";
 
 const tracks: Track[] = tracksData as Track[];
 
-export function getEligibleTracks(params: {
+export interface FilterParams {
   language?: Language;
-  genre?: Genre;
-  era?: Era;
-  difficulty?: Difficulty;
+  genres?: Genre[];
+  genre?: string;
+  eras?: Era[];
+  era?: string;
+  difficulties?: Difficulty[];
+  difficulty?: string;
   excludeIds?: number[];
-}): Track[] {
-  const { language = "all", genre = "all", era = "all", difficulty = "all", excludeIds = [] } = params;
+  excludeArtist?: string;
+}
+
+export function getEligibleTracks(params: FilterParams): Track[] {
+  const { language = "all", excludeIds = [] } = params;
   const excludeSet = new Set(excludeIds);
 
   let pool = tracks.filter((t) => !excludeSet.has(t.id));
@@ -25,19 +31,46 @@ export function getEligibleTracks(params: {
     pool = pool.filter((t) => t.language === language);
   }
 
-  // Filter Genre
-  if (genre !== "all") {
-    pool = pool.filter((t) => t.genre === genre);
+  // Filter Genres (multi-select support)
+  const genres =
+    params.genres && params.genres.length > 0
+      ? params.genres
+      : params.genre && params.genre !== "all"
+      ? [params.genre as Genre]
+      : [];
+
+  if (genres.length > 0 && genres.length < 5) {
+    const genreSet = new Set(genres);
+    const filtered = pool.filter((t) => genreSet.has(t.genre));
+    if (filtered.length > 0) pool = filtered;
   }
 
-  // Filter Era
-  if (era !== "all") {
-    pool = pool.filter((t) => t.era === era);
+  // Filter Eras (multi-select support)
+  const eras =
+    params.eras && params.eras.length > 0
+      ? params.eras
+      : params.era && params.era !== "all"
+      ? [params.era as Era]
+      : [];
+
+  if (eras.length > 0 && eras.length < 4) {
+    const eraSet = new Set(eras);
+    const filtered = pool.filter((t) => eraSet.has(t.era));
+    if (filtered.length > 0) pool = filtered;
   }
 
-  // Filter Difficulty
-  if (difficulty !== "all") {
-    pool = pool.filter((t) => t.difficulty === difficulty);
+  // Filter Difficulties (multi-select support)
+  const difficulties =
+    params.difficulties && params.difficulties.length > 0
+      ? params.difficulties
+      : params.difficulty && params.difficulty !== "all"
+      ? [params.difficulty as Difficulty]
+      : [];
+
+  if (difficulties.length > 0 && difficulties.length < 4) {
+    const diffSet = new Set(difficulties);
+    const filtered = pool.filter((t) => diffSet.has(t.difficulty));
+    if (filtered.length > 0) pool = filtered;
   }
 
   // Fallback if overly filtered
@@ -54,14 +87,7 @@ export function getEligibleTracks(params: {
 
 let lastSelectedArtist = "";
 
-export function getRandomTrack(params: {
-  language?: Language;
-  genre?: Genre;
-  era?: Era;
-  difficulty?: Difficulty;
-  excludeIds?: number[];
-  excludeArtist?: string;
-}): Track {
+export function getRandomTrack(params: FilterParams): Track {
   const pool = getEligibleTracks(params);
   if (pool.length === 0) return tracks[0];
 
