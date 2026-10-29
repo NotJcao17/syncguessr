@@ -13,7 +13,10 @@ const GROUPS = {
     Jay Wheeler; Mora; Young Miko; Dalex; Justin Quiles; Brytiago; Darell; Lyanno; Kevvo; Rkm & Ken-y; Tony Dize;
     Baby Rasta & Gringo; Gente De Zona; Bizarrap; Duki; Trueno; Nicki Nicole; Paulo Londra; Tiago PZK; Maria Becerra;
     Emilia; FMK; LIT killah; L-Gante; KHEA; Rusherking; Wos; YSY A; Cazzu; Milo j; Quevedo; Saiko; Rels B; Bad Gyal;
-    Morad; Cris MJ; Tokischa; Jhay Cortez; Guaynaa; Noriel; Kris R; Beéle; Manuel Turizo; Ovy On The Drums; Yandar & Yostin; Kapo; El Alfa; Ñejo; Chimbala; Ken-Y; Omar Courtz; Dei V`,
+    Morad; Cris MJ; Tokischa; Jhay Cortez; Guaynaa; Noriel; Kris R; Beéle; Manuel Turizo; Ovy On The Drums; Yandar & Yostin; Kapo; El Alfa; Ñejo; Chimbala; Ken-Y; Omar Courtz; Dei V; NSQK; Latin Mafia`,
+
+  // Japanese: kept out of the Spanish/English filters, playable in artist mode.
+  "ja:pop": `Ado`,
 
   "es:pop": `Shakira; Enrique Iglesias; ROSALÍA; Aitana; Luis Fonsi; Ricky Martin; Juanes; Carlos Vives; Camilo; Chayanne;
     Alejandro Sanz; David Bisbal; Pablo Alborán; Thalía; Paulina Rubio; Gloria Trevi; Alejandra Guzmán; Belinda; RBD;

@@ -43,8 +43,8 @@ género (pop, rock, urbano, y "regional, baladas y soul"); para sumar artistas b
 2. `2-enrich.mjs`: agrega canciones icónicas que falten (`iconic.mjs`), refresca datos de Deezer y busca el año
    original en MusicBrainz (1 petición por segundo, tarda ~1 h; todo queda en caché en `scripts/catalog/.cache/`).
 3. `3-build.mjs`: año y época reales y dificultad calculada combinando popularidad actual, fama del artista,
-   posición de la canción en su discografía y antigüedad. La dificultad se reparte dentro de cada idioma y género,
-   para que cualquier combinación de filtros tenga canciones fáciles.
+   posición de la canción en su discografía y antigüedad. Cada nivel tiene un tamaño fijo por idioma (fácil son unas
+   1,100 canciones en inglés y 800 en español), con un mínimo por género para que cualquier filtro tenga fáciles.
 
 Los covers se quedan en el catálogo: adivinar el título correcto cuenta aunque elijas la versión de otro artista.
 

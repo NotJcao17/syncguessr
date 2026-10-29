@@ -1,5 +1,6 @@
-export type Language = "es" | "en";
-export type LanguageFilter = Language | "all";
+/** "ja" songs (Ado) exist only for artist mode; filters cover Spanish and English. */
+export type Language = "es" | "en" | "ja";
+export type LanguageFilter = "es" | "en" | "all";
 export type Genre = "pop" | "rock" | "urban" | "classics";
 export type Era = "pre-80" | "80s" | "90s" | "2000s" | "2010s" | "2020s";
 export type Difficulty = "easy" | "medium" | "hard" | "expert";

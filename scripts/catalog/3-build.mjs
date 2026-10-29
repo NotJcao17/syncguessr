@@ -89,39 +89,48 @@ for (const t of tracks) {
 }
 
 // --- recognizability score ---------------------------------------------------
-// Deezer rank measures streaming today, which underrates older classics, so age adds a bonus;
-// an artist's biggest songs are far more recognizable than the rest of the discography.
+// Deezer rank measures streaming today, which underrates older classics, so age adds a bonus.
+// An artist's biggest songs get a bonus too, scaled by how big the artist is: a small artist's
+// best song is not as recognizable as a superstar's.
 for (const list of byArtist.values()) {
   list.sort((a, b) => b.rank - a.rank);
-  const peak = list[0].rank;
+  const peak = list[0].rank / 1e6;
   list.forEach((t, i) => {
     const age = Math.max(0, Math.min(1, (2016 - t.year) / 40));
-    t.score = 0.55 * (t.rank / 1e6) + 0.2 * (peak / 1e6) + 0.15 / (1 + i * 0.6) + 0.1 * age;
+    t.score = 0.6 * (t.rank / 1e6) + 0.15 * peak + (0.15 * peak) / (1 + i * 0.6) + 0.1 * age;
   });
 }
 
 // Covers and same-title songs stay: guessing the right title counts as correct (see /api/verify),
 // and a title-only heuristic removed far more distinct songs ("Angel", "Perfect") than real covers.
 
-// --- difficulty by quantiles, per language and genre ----------------------------
-// Ranking inside each genre keeps every filter combination playable: regional and soul songs
-// stream far less than reggaetón, so a single global ranking would leave them almost no easy songs.
-const SHARES = [
-  ["easy", 0.16],
-  ["medium", 0.3],
-  ["hard", 0.3],
-  ["expert", 1],
-];
-for (const group of new Set(tracks.map((t) => `${t.language}:${t.genre}`))) {
-  const list = tracks.filter((t) => `${t.language}:${t.genre}` === group).sort((a, b) => b.score - a.score);
-  let i = 0;
-  let acc = 0;
-  for (const [level, share] of SHARES) {
-    acc = Math.min(1, acc + share);
-    const end = Math.round(list.length * acc);
-    for (; i < end; i++) list[i].difficulty = level;
+// --- difficulty ------------------------------------------------------------------
+// Fixed sizes per language rather than percentages: growing the catalog adds deep cuts, and with
+// percentages every new artist pushed lesser songs into "easy". Easy is roughly the songs most
+// people know; each genre still gets a minimum so every filter combination stays playable.
+const LEVELS = {
+  en: { easy: 1100, medium: 3600, hard: 7000 },
+  es: { easy: 800, medium: 2600, hard: 4200 },
+};
+const MIN_SHARE = { easy: 0.05, medium: 0.2 };
+for (const [lang, sizes] of Object.entries(LEVELS)) {
+  const list = tracks.filter((t) => t.language === lang).sort((a, b) => b.score - a.score);
+  list.forEach((t, i) => {
+    t.difficulty =
+      i < sizes.easy ? "easy" : i < sizes.easy + sizes.medium ? "medium" : i < sizes.easy + sizes.medium + sizes.hard ? "hard" : "expert";
+  });
+  // Genres that stream less (regional, soul) get their best songs promoted up to the minimum.
+  for (const genre of new Set(list.map((t) => t.genre))) {
+    const songs = list.filter((t) => t.genre === genre);
+    let rank = 0;
+    for (const [level, share] of Object.entries(MIN_SHARE)) {
+      rank += Math.ceil(songs.length * share);
+      for (const t of songs.slice(0, rank)) if (t.difficulty !== "easy" && t.difficulty !== level) t.difficulty = level;
+    }
   }
 }
+// Songs outside Spanish and English (Ado) are only playable in artist mode.
+for (const t of tracks) if (!(t.language in LEVELS)) t.difficulty = "hard";
 for (const t of tracks) if (t.iconic) t.difficulty = "easy";
 
 // --- output ------------------------------------------------------------------

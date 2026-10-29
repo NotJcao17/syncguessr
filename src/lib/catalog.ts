@@ -64,7 +64,7 @@ export function titleKey(title: string): string {
 
 export function matchesFilters(t: Track, f: Filters): boolean {
   return (
-    (f.language === "all" || t.language === f.language) &&
+    (f.language === "all" ? t.language === "es" || t.language === "en" : t.language === f.language) &&
     f.genres.includes(t.genre) &&
     f.eras.includes(t.era) &&
     f.difficulties.includes(t.difficulty)
