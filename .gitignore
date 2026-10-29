@@ -42,3 +42,6 @@ next-env.d.ts
 
 # catalog pipeline caches
 scripts/catalog/.cache/
+
+# local Claude tooling
+.claude/
