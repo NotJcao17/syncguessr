@@ -140,7 +140,7 @@ export function searchTracks(
   const words = q.split(/\s+/).filter(Boolean);
   const artistSet = opts.artists?.length ? new Set(opts.artists) : null;
 
-  const scored: { t: Track; score: number }[] = [];
+  const scored: { t: Track; score: number; byArtist: boolean }[] = [];
   for (const { track, title, artist } of searchIndex) {
     if (opts.language && opts.language !== "all" && track.language !== opts.language) continue;
     if (artistSet && !artistSet.has(track.artist)) continue;
@@ -150,7 +150,7 @@ export function searchTracks(
     // Ranking depends only on the query text, never on the song being played.
     const titleScore = title === q ? 6 : title.startsWith(q) ? 4 : title.includes(q) ? 2 : 0;
     const artistScore = artist === q ? 5 : artist.startsWith(q) ? 3 : artist.includes(q) ? 1 : 0;
-    scored.push({ t: track, score: Math.max(titleScore, artistScore) });
+    scored.push({ t: track, score: Math.max(titleScore, artistScore), byArtist: artistScore >= 3 });
   }
 
   scored.sort((a, b) => {
@@ -168,7 +168,10 @@ export function searchTracks(
     seen.add(key);
     return true;
   });
-  return unique.slice(0, limit).map(({ t }) => ({ id: t.id, title: t.title, artist: t.artist, cover: t.cover }));
+  // Searching an artist by name lists their whole catalog (A-Z), not just the first `limit` songs:
+  // otherwise songs late in the alphabet ("Young Girls") could never be found that way.
+  const artistHits = unique.filter((r) => r.byArtist).length;
+  return unique.slice(0, Math.min(150, Math.max(limit, artistHits))).map(({ t }) => ({ id: t.id, title: t.title, artist: t.artist, cover: t.cover }));
 }
 
 export function searchArtists(query: string, limit = 12): ArtistResult[] {
