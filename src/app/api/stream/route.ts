@@ -33,21 +33,41 @@ async function deezerApi(path: string) {
   return null;
 }
 
+interface DeezerTrack {
+  preview?: string;
+  title: string;
+  title_version?: string;
+  duration?: number;
+  rank?: number;
+  artist?: { name: string };
+}
+
+/** Only these subtitles keep a release the same recording ("feat.", remasters, edits). */
+const HARMLESS_VERSION =
+  /^\s*[\(\[]?\s*(feat\.?|ft\.?|with|con|remaster(ed)?|\d{4} remaster(ed)?|radio edit|single version|album version)\b/i;
+
 /**
- * The track's own preview, or another release of the same song by the same artist when that one
- * has none (some releases are blocked in the server's region or were taken down).
+ * The track's own preview, or the same recording from another release by the same artist when
+ * that one has none (some releases are blocked in the server's region). Remixes, live takes and
+ * slowed versions share the title but not the sound, so the fallback demands a plain title and,
+ * when known, the same length within a few seconds.
  */
 async function previewUrl(trackId: number): Promise<string | null> {
-  const data = await deezerApi(`/track/${trackId}`);
+  const data: DeezerTrack | null = await deezerApi(`/track/${trackId}`);
   if (data?.preview) return data.preview;
   const track = getTrack(trackId);
   if (!track) return null;
-  const found = await deezerApi(`/search?q=${encodeURIComponent(`${track.artist} ${track.title}`)}&limit=15`);
-  const alt = (found?.data ?? []).find(
-    (d: { preview?: string; title: string; artist?: { name: string } }) =>
-      d.preview && titleKey(d.title) === titleKey(track.title) && d.artist?.name.toLowerCase() === track.artist.toLowerCase()
+  const found = await deezerApi(`/search?q=${encodeURIComponent(`${track.artist} ${track.title}`)}&limit=25`);
+  const candidates = ((found?.data ?? []) as DeezerTrack[]).filter(
+    (d) =>
+      d.preview &&
+      d.artist?.name.toLowerCase() === track.artist.toLowerCase() &&
+      titleKey(d.title) === titleKey(track.title) &&
+      (!d.title_version || HARMLESS_VERSION.test(d.title_version)) &&
+      (!data?.duration || !d.duration || Math.abs(d.duration - data.duration) <= 4)
   );
-  return alt?.preview ?? null;
+  candidates.sort((x, y) => (y.rank ?? 0) - (x.rank ?? 0));
+  return candidates[0]?.preview ?? null;
 }
 
 const audioResponse = (buffer: ArrayBuffer) =>

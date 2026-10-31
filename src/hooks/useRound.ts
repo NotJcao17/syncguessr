@@ -66,6 +66,15 @@ export function useRound({
   const [roundToken, setRoundToken] = useState<string | null>(null);
 
   const tokenRef = useRef<string | null>(null);
+  // Synchronous guards: several fast clicks can land before React re-renders with the new state.
+  const unlockedRef = useRef(0);
+  const finishedRef = useRef<string | null>(null);
+  const attemptsRef = useRef<Attempt[]>([]);
+  const pushAttempt = useCallback((attempt: Attempt) => {
+    attemptsRef.current = [...attemptsRef.current, attempt];
+    setAttempts(attemptsRef.current);
+    return attemptsRef.current;
+  }, []);
   const onFinishRef = useRef(onFinish);
   useEffect(() => {
     onFinishRef.current = onFinish;
@@ -87,6 +96,11 @@ export function useRound({
   useEffect(() => {
     if (!ticket) return;
     const token = ticket.token;
+    if (tokenRef.current !== token) {
+      unlockedRef.current = 0;
+      finishedRef.current = null;
+      attemptsRef.current = [];
+    }
     tokenRef.current = token;
     audioEngine.load(streamUrl(ticket)).then((ok) => {
       if (tokenRef.current !== token) return;
@@ -121,6 +135,9 @@ export function useRound({
   const finish = useCallback(
     async (won: boolean, stage: number, allAttempts: Attempt[], revealed: RevealedTrack | null) => {
       const token = tokenRef.current;
+      // The reveal request takes a moment; without this, extra clicks meanwhile ended the round again.
+      if (!token || finishedRef.current === token) return;
+      finishedRef.current = token;
       let finalTrack = revealed;
       if (!finalTrack && token) {
         const res = await verify({ token, reveal: true });
@@ -138,19 +155,21 @@ export function useRound({
 
   const advance = useCallback(
     (attempt: Attempt) => {
-      const next = [...attempts, attempt];
-      setAttempts(next);
-      if (unlocked + 1 >= stages.length) {
+      if (finishedRef.current === tokenRef.current) return;
+      const current = unlockedRef.current;
+      const next = pushAttempt({ ...attempt, stage: current });
+      if (current + 1 >= stages.length) {
         audioEngine.stop();
-        void finish(false, unlocked, next, null);
+        void finish(false, current, next, null);
         return;
       }
-      const nextStage = unlocked + 1;
+      const nextStage = current + 1;
+      unlockedRef.current = nextStage;
       setUnlocked(nextStage);
       setListening(nextStage);
       audioEngine.play(stages[nextStage]);
     },
-    [attempts, unlocked, stages, finish]
+    [stages, finish, pushAttempt]
   );
 
   const guess = useCallback(
@@ -164,28 +183,33 @@ export function useRound({
       if (tokenRef.current !== token || !res) return;
       const g = { title: item.title, artist: item.artist };
       if (res.correct) {
-        const next = [...attempts, { stage: unlocked, kind: "correct" as const, guess: g }];
-        setAttempts(next);
-        void finish(true, unlocked, next, res.track ?? null);
+        const stage = unlockedRef.current;
+        const next = pushAttempt({ stage, kind: "correct", guess: g });
+        void finish(true, stage, next, res.track ?? null);
       } else {
-        advance({ stage: unlocked, kind: "wrong", guess: g, artistMatch: res.artistMatch });
+        advance({ stage: unlockedRef.current, kind: "wrong", guess: g, artistMatch: res.artistMatch });
       }
     },
-    [phase, busy, attempts, unlocked, finish, advance]
+    [phase, busy, finish, advance, pushAttempt]
   );
 
   const skip = useCallback(() => {
     if (phase !== "ready" || busy) return;
-    advance({ stage: unlocked, kind: "skip" });
-  }, [phase, busy, unlocked, advance]);
+    advance({ stage: unlockedRef.current, kind: "skip" });
+  }, [phase, busy, advance]);
 
   const giveUp = useCallback(() => {
-    if (phase !== "ready" || busy) return;
+    if (phase !== "ready" || busy || finishedRef.current === tokenRef.current) return;
     audioEngine.stop();
-    const next = [...attempts, { stage: unlocked, kind: "skip" as const }];
-    setAttempts(next);
-    void finish(false, unlocked, next, null);
-  }, [phase, busy, attempts, unlocked, finish]);
+    const stage = unlockedRef.current;
+    void finish(false, stage, pushAttempt({ stage, kind: "skip" }), null);
+  }, [phase, busy, finish, pushAttempt]);
+
+  /** The audio never loaded: count the round as lost so a fixed game can go on. */
+  const forfeit = useCallback(() => {
+    if (phase !== "error") return;
+    void finish(false, stages.length - 1, attemptsRef.current, null);
+  }, [phase, stages, finish]);
 
   const retryReveal = useCallback(async () => {
     const token = tokenRef.current;
@@ -196,5 +220,5 @@ export function useRound({
     setRevealFailed(false);
   }, []);
 
-  return { phase, unlocked, listening, attempts, track, peaks, busy, revealFailed, play, guess, skip, giveUp, retryReveal, reload };
+  return { phase, unlocked, listening, attempts, track, peaks, busy, revealFailed, play, guess, skip, giveUp, retryReveal, reload, forfeit };
 }

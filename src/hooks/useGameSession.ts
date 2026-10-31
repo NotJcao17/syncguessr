@@ -136,6 +136,8 @@ export function useGameSession(config: SessionConfig) {
 
   const onRoundFinished = useCallback(
     (outcome: RoundOutcome) => {
+      // One outcome per round, whatever the round reports.
+      if (outcomes.length > index) return;
       const { points, multiplier } = scoreRound({
         won: outcome.won,
         stage: outcome.stage,
@@ -168,7 +170,7 @@ export function useGameSession(config: SessionConfig) {
         });
       }
     },
-    [streak, outcomes, fetchEndlessTicket]
+    [streak, outcomes, index, fetchEndlessTicket]
   );
 
   /** The track may be revealed after the round ended (retry after a network error). */

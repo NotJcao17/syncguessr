@@ -291,7 +291,11 @@ export function GameScreen(props: GameScreenProps) {
                   <button type="button" className="btn btn-light btn-sm" onClick={round.reload}>
                     Reintentar
                   </button>
-                  {!counted && (
+                  {counted ? (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={round.forfeit}>
+                      Pasar a la siguiente
+                    </button>
+                  ) : (
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => void session.reroll()}>
                       Otra canción
                     </button>
