@@ -1,8 +1,8 @@
 // Step 3: turn the enriched cache into src/data/tracks.json.
 // Works offline from whatever steps 1-2 cached; missing data falls back gracefully.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { ARTISTS } from "./artists.mjs";
-import { artistKey } from "./normalize.mjs";
+import { ARTISTS, CURATED } from "./artists.mjs";
+import { artistKey, songKey } from "./normalize.mjs";
 
 const CACHE = "scripts/catalog/.cache";
 const load = (f, fb) => (existsSync(`${CACHE}/${f}`) ? JSON.parse(readFileSync(`${CACHE}/${f}`, "utf8")) : fb);
@@ -120,7 +120,20 @@ for (const list of byArtist.values()) {
     t.score = 0.6 * (t.rank / 1e6) + 0.15 * peak + (0.15 * peak) / (1 + i * 0.6) + 0.1 * age;
   });
   // Position among the artist's own songs (0 = best known), for artist mode's "only hits".
-  [...list].sort((a, b) => b.score - a.score).forEach((t, i) => (t.top = i));
+  // Deezer rank is streaming right now, so a new release outranks the hits people actually know
+  // (Taylor Swift's 2025 album filled her top 8): recent songs lose part of their rank here.
+  const fresh = (t) => (t.year >= NEW_RELEASE_YEAR ? 0.8 : t.year === NEW_RELEASE_YEAR - 1 ? 0.9 : 1);
+  const known = (t) => (t.rank / 1e6) * fresh(t) + 0.1 * Math.max(0, Math.min(1, (2016 - t.year) / 40));
+  const curated = CURATED[list[0].artist]?.map(songKey);
+  const order = curated
+    ? (t) => {
+        const i = curated.indexOf(songKey(t.title));
+        return i < 0 ? curated.length : i;
+      }
+    : null;
+  [...list]
+    .sort((a, b) => (order ? order(a) - order(b) : 0) || known(b) - known(a))
+    .forEach((t, i) => (t.top = i));
 }
 
 // Covers and same-title songs stay: guessing the right title counts as correct (see /api/verify),

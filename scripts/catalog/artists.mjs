@@ -271,18 +271,19 @@ export const ARTIST_IDS = {
 /**
  * Hand-picked songs for artists whose Deezer top list misrepresents them (a new album taking every
  * spot, or dozens of deep cuts). Matched by song title; nothing else of theirs enters the catalog.
+ * Listed best known first: that order, not Deezer's, decides their hits in artist mode.
  */
 export const CURATED = {
   NSQK: [
-    "¿Qué Tan Cerca Es Cerca?", "Lo Tuvimos Pero Ya No Está", "SAMSA", "Hombre De Bien", "Santurce",
-    "309", "De Vez en Cuando (Aparece)", "Tonos de Azul", "Árbol De Manzanas", "los alpes", "MIATA", "OTROS LUGARES",
-    "piel", "Fortnite", "No veo bien", "BAD INTENCIONES", "Año Bisiesto", "Continental", "Ya entregamos el depa",
-    "Corazón : Classics", "Algo Extraño", "El Tiempo Que Necesites", "Ojeras", "Dientes", "¿En Qué Momento?",
-    "Cuando Me Vaya", "Moldes", "Antagonista", "Bien Decía Mamá", "Clara",
+    "309", "De Vez en Cuando (Aparece)", "los alpes", "Ojeras", "Dientes", "OTROS LUGARES", "piel", "BAD INTENCIONES",
+    "Tonos de Azul", "¿Qué Tan Cerca Es Cerca?", "Corazón : Classics", "Algo Extraño", "MIATA", "Árbol De Manzanas",
+    "Moldes", "¿En Qué Momento?", "Cuando Me Vaya", "Antagonista", "El Tiempo Que Necesites", "Fortnite", "No veo bien",
+    "Año Bisiesto", "Continental", "Ya entregamos el depa", "Bien Decía Mamá", "Clara",
+    "Lo Tuvimos Pero Ya No Está", "SAMSA", "Hombre De Bien", "Santurce",
   ],
   "Danny Ocean": [
-    "Me Rehúso", "Dembow", "Epa Wei", "Vuelve", "Swing", "Báilame", "Cuando Me Acerco A Ti", "Veneno", "Dime tú",
-    "Baby I Won't", "Tú no me conoces", "Fuera del mercado", "Volare", "Imagínate", "Priti", "Vitamina",
+    "Me Rehúso", "Dembow", "Epa Wei", "Swing", "Vuelve", "Báilame", "Cuando Me Acerco A Ti", "Fuera del mercado",
+    "Imagínate", "Priti", "Volare", "Tú no me conoces", "Veneno", "Dime tú", "Baby I Won't", "Vitamina",
     "Ley universal", "Desahógate",
   ],
 };

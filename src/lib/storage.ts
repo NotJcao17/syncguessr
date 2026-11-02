@@ -14,7 +14,6 @@ const KEYS = {
   records: "syncguessr:records",
   daily: "syncguessr:daily",
   artists: "syncguessr:artists",
-  artistHits: "syncguessr:artist-hits",
 } as const;
 
 function read<T>(key: string, fallback: T): T {
@@ -55,8 +54,6 @@ export const loadArtists = (): ArtistResult[] => {
   return Array.isArray(a) ? a.filter((x) => x && typeof x.name === "string").slice(0, 20) : [];
 };
 export const saveArtists = (a: ArtistResult[]) => write(KEYS.artists, a);
-export const loadArtistHits = (): boolean => read<unknown>(KEYS.artistHits, false) === true;
-export const saveArtistHits = (on: boolean) => write(KEYS.artistHits, on);
 
 // --- Played history (free mode avoids repeats) ---------------------------------
 

@@ -10,7 +10,7 @@ tipografía Archivo con eje de anchura e iconos Solar en estilo *broken*.
   +10% por acierto seguido (hasta +50%) y un cuarto de los puntos si fallas la canción pero aciertas el artista.
   Guarda récord por mezcla de dificultad.
 - **Modo artista**: 5 canciones de los artistas elegidos, con récord por selección. Con **Solo hits** solo suenan
-  las 8 canciones más conocidas de cada artista (la mitad si tiene pocas) y pide al menos 15 en total.
+  las 10 canciones más conocidas de cada artista (la mitad si tiene pocas) y pide al menos 15 en total.
 - **Libre**: sin fin, con filtros, racha y opción de quitar pistas.
 - **Modo fiesta**: la música suena solo en el dispositivo del host; los demás entran con un código de 4 letras y
   adivinan desde su celular. Va por WebRTC con PeerJS (el broker público de PeerJS solo hace el primer contacto): el

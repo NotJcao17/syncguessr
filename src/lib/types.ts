@@ -53,7 +53,7 @@ export interface Track {
 }
 
 /** "Only hits" in artist mode: each artist's best-known songs, at most half of what we have of them. */
-export const HITS_PER_ARTIST = 8;
+export const HITS_PER_ARTIST = 10;
 export const hitsFor = (songs: number) => Math.min(HITS_PER_ARTIST, Math.ceil(songs / 2));
 /** Below this an "only hits" selection repeats songs after a couple of games. */
 export const MIN_HIT_SONGS = 15;

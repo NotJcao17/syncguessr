@@ -8,7 +8,7 @@ import { Icon } from "@/components/Icon";
 import { SetupLayout } from "@/components/SetupLayout";
 import { randomSeed } from "@/lib/rng";
 import { GAME_LENGTH, STAGES, formatPoints } from "@/lib/scoring";
-import { loadArtistHits, loadArtists, loadRecord, saveArtistHits, saveArtists } from "@/lib/storage";
+import { loadArtists, loadRecord, saveArtists } from "@/lib/storage";
 import { ArtistResult, HITS_PER_ARTIST, hitsFor, MIN_HIT_SONGS } from "@/lib/types";
 
 const recordKey = (artists: string[], hits: boolean) =>
@@ -29,7 +29,8 @@ export function ArtistaGame() {
   const params = useSearchParams();
   const router = useRouter();
   const [artists, setArtists] = useState<ArtistResult[]>(loadArtists);
-  const [hitsOnly, setHitsOnly] = useState(loadArtistHits);
+  // Off whenever the screen opens; a challenge link still carries its own setting.
+  const [hitsOnly, setHitsOnly] = useState(false);
   const [game, setGame] = useState<Game | null>(null);
 
   const challenge = (() => {
@@ -170,10 +171,7 @@ export function ArtistaGame() {
         type="button"
         role="switch"
         aria-checked={hitsOnly}
-        onClick={() => {
-          setHitsOnly(!hitsOnly);
-          saveArtistHits(!hitsOnly);
-        }}
+        onClick={() => setHitsOnly(!hitsOnly)}
         className="mb-6 flex w-full items-center gap-4 rounded-2xl bg-surface p-4 text-left"
       >
         <Icon name="star" className="size-6 shrink-0 text-indigo-soft" />
