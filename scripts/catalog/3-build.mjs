@@ -147,8 +147,39 @@ const LEVELS = {
   es: { easy: 800, medium: 2600, hard: 4200 },
 };
 const MIN_SHARE = { easy: 0.05, medium: 0.2 };
+// How well known a song is: the Deezer score (today's streaming), with this week's releases
+// discounted, raised by Last.fm's all-time listeners when those say it's bigger. Both as percentiles
+// within the language, since their scales have nothing in common. Last.fm only lifts: its users
+// mostly play rock and English-language music, and it files duets under one artist ("El Perdón"),
+// so a low Last.fm count says little.
+const percentiles = (list, value) => {
+  const sorted = list.map(value).sort((a, b) => a - b);
+  return (t) => {
+    const v = value(t);
+    let lo = 0;
+    let hi = sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] < v) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo / sorted.length;
+  };
+};
+const heardOf = (t) => lastfm[t.artist]?.[t.songKey] ?? 0;
+const freshScore = (t) =>
+  t.score - 0.6 * (t.rank / 1e6) * (t.year >= NEW_RELEASE_YEAR ? 0.3 : t.year === NEW_RELEASE_YEAR - 1 ? 0.15 : 0);
+for (const lang of Object.keys(LEVELS)) {
+  const list = tracks.filter((t) => t.language === lang);
+  const byScore = percentiles(list, freshScore);
+  const byHeard = percentiles(list.filter((t) => heardOf(t) > 0), heardOf);
+  for (const t of list) {
+    const streamed = byScore(t);
+    t.fame = heardOf(t) > 0 ? Math.max(streamed, (streamed + byHeard(t)) / 2) : streamed;
+  }
+}
 for (const [lang, sizes] of Object.entries(LEVELS)) {
-  const list = tracks.filter((t) => t.language === lang).sort((a, b) => b.score - a.score);
+  const list = tracks.filter((t) => t.language === lang).sort((a, b) => b.fame - a.fame);
   list.forEach((t, i) => {
     t.difficulty =
       i < sizes.easy ? "easy" : i < sizes.easy + sizes.medium ? "medium" : i < sizes.easy + sizes.medium + sizes.hard ? "hard" : "expert";

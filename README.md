@@ -52,7 +52,9 @@ género (pop, rock, urbano, y "regional, baladas y soul"); para sumar artistas b
 2. `2-enrich.mjs`: agrega canciones icónicas que falten (`iconic.mjs`), refresca datos de Deezer y busca el año
    original en MusicBrainz (1 petición por segundo, tarda ~1 h; todo queda en caché en `scripts/catalog/.cache/`).
 2b. `2b-lastfm.mjs`: oyentes de todos los tiempos por canción en Last.fm (necesita `LASTFM_API_KEY`). Decide qué
-   canciones son los "hits" de cada artista; el rank de Deezer solo mide lo que se escucha esta semana.
+   canciones son los "hits" de cada artista y sube en dificultad las canciones que Deezer subestima (el rank de Deezer
+   solo mide lo que se escucha esta semana). Last.fm solo sube canciones, nunca las baja: sus usuarios escuchan sobre
+   todo rock e inglés, y atribuye los duetos a un solo artista.
 3. `3-build.mjs`: año y época reales y dificultad calculada combinando popularidad actual, fama del artista,
    posición de la canción en su discografía y antigüedad. Cada nivel tiene un tamaño fijo por idioma (fácil son unas
    1,100 canciones en inglés y 800 en español), con un mínimo por género para que cualquier filtro tenga fáciles.
