@@ -93,12 +93,46 @@ for (const info of Object.values(ids)) {
 }
 save("artist-tops.json", tops);
 
+// --- curated songs outside the top list ---------------------------------------------
+// The top list stops at 100 entries and skips some album tracks; those are searched by title.
+const extras = load("curated-extra.json", {});
+for (const [name, titles] of Object.entries(CURATED)) {
+  const info = ids[name];
+  if (!info) continue;
+  const have = new Set((tops[info.id] ?? []).map((d) => songKey(d.title)));
+  for (const title of titles) {
+    const key = songKey(title);
+    if (have.has(key) || extras[`${name}::${key}`]) continue;
+    const res = await getJson(`https://api.deezer.com/search?q=${encodeURIComponent(`${name} ${title}`)}&limit=15`);
+    const d = (res?.data ?? []).find((x) => x.artist?.id === info.id && songKey(x.title) === key && x.readable && x.preview);
+    if (!d) {
+      console.log(`  ! curated song not on Deezer: ${title} / ${name}`);
+      continue;
+    }
+    extras[`${name}::${key}`] = {
+      id: d.id,
+      title: d.title,
+      rank: d.rank,
+      readable: d.readable,
+      preview: true,
+      artistId: d.artist.id,
+      album: d.album?.title ?? "",
+      albumId: d.album?.id,
+      cover: d.album?.cover_medium,
+      coverXl: d.album?.cover_xl,
+    };
+    await sleep(150);
+  }
+}
+save("curated-extra.json", extras);
+
 // --- selection ------------------------------------------------------------------
 const out = [];
 for (const [name, meta] of roster) {
   const info = ids[name];
   if (!info) continue;
-  const songs = (tops[info.id] ?? [])
+  const extra = CURATED[name] ? Object.entries(extras).filter(([k]) => k.startsWith(`${name}::`)).map(([, d]) => d) : [];
+  const songs = [...(tops[info.id] ?? []), ...extra]
     .filter((d) => d.readable && d.preview && d.artistId === info.id && !isBadVersion(d.title) && !isLiveAlbum(d.album))
     .sort((a, b) => b.rank - a.rank);
   const curated = CURATED[name] && new Set(CURATED[name].map(songKey));

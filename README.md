@@ -51,6 +51,8 @@ género (pop, rock, urbano, y "regional, baladas y soul"); para sumar artistas b
    `ARTIST_IDS` corrige artistas que la búsqueda confundía con otro (Raphael).
 2. `2-enrich.mjs`: agrega canciones icónicas que falten (`iconic.mjs`), refresca datos de Deezer y busca el año
    original en MusicBrainz (1 petición por segundo, tarda ~1 h; todo queda en caché en `scripts/catalog/.cache/`).
+2b. `2b-lastfm.mjs`: oyentes de todos los tiempos por canción en Last.fm (necesita `LASTFM_API_KEY`). Decide qué
+   canciones son los "hits" de cada artista; el rank de Deezer solo mide lo que se escucha esta semana.
 3. `3-build.mjs`: año y época reales y dificultad calculada combinando popularidad actual, fama del artista,
    posición de la canción en su discografía y antigüedad. Cada nivel tiene un tamaño fijo por idioma (fácil son unas
    1,100 canciones en inglés y 800 en español), con un mínimo por género para que cualquier filtro tenga fáciles.
@@ -63,5 +65,6 @@ Los covers se quedan en el catálogo: adivinar el título correcto cuenta aunque
 node scripts/catalog/0-expand.mjs
 node scripts/catalog/1-dedupe.mjs
 node scripts/catalog/2-enrich.mjs
+LASTFM_API_KEY=... node scripts/catalog/2b-lastfm.mjs
 node scripts/catalog/3-build.mjs
 ```

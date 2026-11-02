@@ -271,15 +271,15 @@ export const ARTIST_IDS = {
 /**
  * Hand-picked songs for artists whose Deezer top list misrepresents them (a new album taking every
  * spot, or dozens of deep cuts). Matched by song title; nothing else of theirs enters the catalog.
- * Listed best known first: that order, not Deezer's, decides their hits in artist mode.
+ * Songs missing from the artist's Deezer top list are searched for one by one.
  */
 export const CURATED = {
   NSQK: [
-    "309", "De Vez en Cuando (Aparece)", "los alpes", "Ojeras", "Dientes", "OTROS LUGARES", "piel", "BAD INTENCIONES",
-    "Tonos de Azul", "¿Qué Tan Cerca Es Cerca?", "Corazón : Classics", "Algo Extraño", "MIATA", "Árbol De Manzanas",
-    "Moldes", "¿En Qué Momento?", "Cuando Me Vaya", "Antagonista", "El Tiempo Que Necesites", "Fortnite", "No veo bien",
-    "Año Bisiesto", "Continental", "Ya entregamos el depa", "Bien Decía Mamá", "Clara",
-    "Lo Tuvimos Pero Ya No Está", "SAMSA", "Hombre De Bien", "Santurce",
+    "BOBOMENSOTONTO", "Si En Tu Mente Estuve", "Tarde o temprano", "309", "De Vez en Cuando (Aparece)", "LOVELANGUAGE",
+    "Blamegame", "NADIE MÁS!", "Cienciaficción", "los alpes", "MIATA", "BAD INTENCIONES", "Aún Te Pienso", "MUBI",
+    "Corazón : Classics", "OTROS LUGARES", "Árbol De Manzanas", "Tonos de Azul", "El Tiempo Que Necesites", "piel",
+    "Cuando Me Vaya", "Moldes", "Algo Extraño", "Ojeras", "Dientes", "¿En Qué Momento?", "Antagonista",
+    "¿Qué Tan Cerca Es Cerca?", "Lo Tuvimos Pero Ya No Está",
   ],
   "Danny Ocean": [
     "Me Rehúso", "Dembow", "Epa Wei", "Swing", "Vuelve", "Báilame", "Cuando Me Acerco A Ti", "Fuera del mercado",

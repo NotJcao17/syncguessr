@@ -1,8 +1,8 @@
 // Step 3: turn the enriched cache into src/data/tracks.json.
 // Works offline from whatever steps 1-2 cached; missing data falls back gracefully.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { ARTISTS, CURATED } from "./artists.mjs";
-import { artistKey, songKey } from "./normalize.mjs";
+import { ARTISTS } from "./artists.mjs";
+import { artistKey } from "./normalize.mjs";
 
 const CACHE = "scripts/catalog/.cache";
 const load = (f, fb) => (existsSync(`${CACHE}/${f}`) ? JSON.parse(readFileSync(`${CACHE}/${f}`, "utf8")) : fb);
@@ -11,6 +11,7 @@ let tracks = load("enriched.json", null) ?? load("deduped.json", []);
 const deezer = load("deezer.json", {});
 const mb = load("musicbrainz.json", {});
 const albums = load("albums.json", {});
+const lastfm = load("lastfm.json", {});
 const log = [];
 
 // --- availability ----------------------------------------------------------
@@ -120,19 +121,17 @@ for (const list of byArtist.values()) {
     t.score = 0.6 * (t.rank / 1e6) + 0.15 * peak + (0.15 * peak) / (1 + i * 0.6) + 0.1 * age;
   });
   // Position among the artist's own songs (0 = best known), for artist mode's "only hits".
-  // Deezer rank is streaming right now, so a new release outranks the hits people actually know
-  // (Taylor Swift's 2025 album filled her top 8): recent songs lose part of their rank here.
-  const fresh = (t) => (t.year >= NEW_RELEASE_YEAR ? 0.8 : t.year === NEW_RELEASE_YEAR - 1 ? 0.9 : 1);
+  // Last.fm's all-time listeners decide; Deezer rank only measures streaming right now, which put a
+  // new album above the hits people know. A song Last.fm files under another act ("Ella Baila Sola"
+  // is Eslabon Armado's there) still counts by its Deezer rank, discounted when it's a recent release.
+  const heard = lastfm[list[0].artist] ?? {};
+  const fresh = (t) => (t.year >= NEW_RELEASE_YEAR ? 0.7 : t.year === NEW_RELEASE_YEAR - 1 ? 0.85 : 1);
   const known = (t) => (t.rank / 1e6) * fresh(t) + 0.1 * Math.max(0, Math.min(1, (2016 - t.year) / 40));
-  const curated = CURATED[list[0].artist]?.map(songKey);
-  const order = curated
-    ? (t) => {
-        const i = curated.indexOf(songKey(t.title));
-        return i < 0 ? curated.length : i;
-      }
-    : null;
+  const maxHeard = Math.max(1, ...list.map((t) => heard[t.songKey] ?? 0));
+  const maxKnown = Math.max(...list.map(known));
+  const fame = (t) => Math.max((heard[t.songKey] ?? 0) / maxHeard, (0.7 * known(t)) / maxKnown);
   [...list]
-    .sort((a, b) => (order ? order(a) - order(b) : 0) || known(b) - known(a))
+    .sort((a, b) => fame(b) - fame(a))
     .forEach((t, i) => (t.top = i));
 }
 
