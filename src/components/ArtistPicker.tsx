@@ -1,13 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArtistResult } from "@/lib/types";
+import { ArtistResult, hitsFor } from "@/lib/types";
 import { Icon } from "./Icon";
 
 const MAX_ARTISTS = 20;
 
 /** Search the catalog's artists and build a selection of one or more. */
-export function ArtistPicker({ value, onChange }: { value: ArtistResult[]; onChange: (a: ArtistResult[]) => void }) {
+export function ArtistPicker({
+  value,
+  onChange,
+  hitsOnly = false,
+}: {
+  value: ArtistResult[];
+  onChange: (a: ArtistResult[]) => void;
+  /** Count only each artist's hits. */
+  hitsOnly?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ArtistResult[]>([]);
 
@@ -93,7 +102,9 @@ export function ArtistPicker({ value, onChange }: { value: ArtistResult[]; onCha
                   <img src={a.cover} alt="" loading="lazy" className="size-11 shrink-0 rounded-full object-cover" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{a.name}</span>
-                    <span className="block text-sm text-ink-3">{a.songs} canciones</span>
+                    <span className="block text-sm text-ink-3">
+                      {hitsOnly ? `${hitsFor(a.songs)} éxitos` : `${a.songs} canciones`}
+                    </span>
                   </span>
                   <Icon name={on ? "check" : "add"} className={`size-6 ${on ? "text-indigo-soft" : "text-ink-3"}`} />
                 </button>

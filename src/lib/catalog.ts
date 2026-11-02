@@ -9,6 +9,7 @@ import {
   ArtistResult,
   CatalogFacets,
   Filters,
+  hitsFor,
   Language,
   LanguageFilter,
   SearchResultItem,
@@ -27,7 +28,7 @@ export function fold(str: string): string {
     .trim();
 }
 
-// Precomputed search keys: folding 13k titles on every keystroke is wasteful.
+// Precomputed search keys: folding 35k titles on every keystroke is wasteful.
 const searchIndex = tracks.map((t) => ({ track: t, title: fold(t.title), artist: fold(t.artist) }));
 
 const artistIndex = (() => {
@@ -45,6 +46,8 @@ const artistIndex = (() => {
   }
   return [...map.values()];
 })();
+
+const songsByArtist = new Map(artistIndex.map((a) => [a.name, a.songs]));
 
 export function getTrack(id: number): Track | undefined {
   return byId.get(id);
@@ -75,7 +78,9 @@ export function matchesFilters(t: Track, f: Filters): boolean {
 export function eligibleTracks(source: Source): Track[] {
   if (source.kind === "artists") {
     const wanted = new Set(source.artists);
-    return tracks.filter((t) => wanted.has(t.artist));
+    return tracks.filter(
+      (t) => wanted.has(t.artist) && (!source.hits || t.top < hitsFor(songsByArtist.get(t.artist) ?? 0))
+    );
   }
   const f = sanitizeFilters(source.filters);
   return tracks.filter((t) => matchesFilters(t, f));

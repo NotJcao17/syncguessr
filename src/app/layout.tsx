@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo } from "next/font/google";
+import { catalogSize } from "@/lib/catalog";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
     template: "%s · syncguessr",
   },
   description:
-    "Escucha una décima de segundo y adivina la canción. Más de 13 mil canciones en español e inglés, partidas por puntos, modo artista y un reto diario.",
+    `Escucha una décima de segundo y adivina la canción. Más de ${Math.floor(catalogSize / 1000)} mil canciones en español e inglés, partidas por puntos, modo artista, modo fiesta y un reto diario.`,
   applicationName: "syncguessr",
 };
 

@@ -48,7 +48,15 @@ export interface Track {
   genre: Genre;
   era: Era;
   difficulty: Difficulty;
+  /** Position among the artist's own songs, 0 being the best known. */
+  top: number;
 }
+
+/** "Only hits" in artist mode: each artist's best-known songs, at most half of what we have of them. */
+export const HITS_PER_ARTIST = 8;
+export const hitsFor = (songs: number) => Math.min(HITS_PER_ARTIST, Math.ceil(songs / 2));
+/** Below this an "only hits" selection repeats songs after a couple of games. */
+export const MIN_HIT_SONGS = 15;
 
 export interface Filters {
   language: LanguageFilter;
@@ -58,7 +66,9 @@ export interface Filters {
 }
 
 /** Where the songs of a round or game come from. */
-export type Source = { kind: "filters"; filters: Filters } | { kind: "artists"; artists: string[] };
+export type Source =
+  | { kind: "filters"; filters: Filters }
+  | { kind: "artists"; artists: string[]; /** Only each artist's best-known songs. */ hits?: boolean };
 
 /** What the client knows about a round before solving it: an opaque token, never the track id. */
 export interface RoundTicket {

@@ -208,35 +208,84 @@ const EN_WORDS =
 // English contractions ("Livin'", "Don't") outweigh a Spanish word or two in the same title.
 const EN_CONTRACTION = /\w(n'|'(s|t|re|ll|ve|d|m))(\s|$)/gi;
 const IT_WORDS =
-  /\b(e|da|io|che|non|il|di|della|dello|sono|sei|tra|gli|perch[eé]|pi[uù]|questo|quella|amore|cuore|ancora|sempre|mai|notte|siamo|vuoto|ritorno|dove|nessuno|cosa|tutto|niente|grande|uomo|ragazza|strani|amori|occhi|parole|vivimi|incancellabile|solitudine|ascolta)\b|c'[eè]/gi;
+  /(?<!\p{L})(e|da|io|che|non|il|di|della|dello|sono|sei|tra|gli|perch[eé]|pi[uù]|questo|quella|amore|cuore|ancora|sempre|mai|notte|siamo|vuoto|ritorno|dove|nessuno|cosa|tutto|niente|grande|uomo|ragazza|strani|amori|occhi|parole|vivimi|incancellabile|solitudine|ascolta|adesso|per|nel|alla|mio|buoni|zitti|torna|casa|vita|ballo)(?!\p{L})|c'[eè]|[ìò]/giu;
 
 const FR_WORDS =
-  /\b(le|les|une|je|pas|est|mon|ma|toujours|pour|qui|dans|avec|faut|moi|toi|nous|vous|sur|perdant|amour)\b|c'est|j'ai/gi;
+  /(?<!\p{L})(le|les|une|je|pas|est|mon|ma|toujours|pour|qui|dans|avec|faut|moi|toi|nous|vous|sur|perdant|amour|et|des|du|au|aux|ne|sous|vent|monde|soleil|coeur|cœur|rien|jamais|encore|chanson|soir|jour|petits?|petites?|mais|oui|ça|suis|sans|bonjour|merci|ensemble|demain|aujourd'hui|eux|vie|aimer|viens|nuit|ris|pleures)(?!\p{L})|(?<!\p{L})(c|d|j|l|m|n|qu|s|t)['’](?=[aeiouhéèêàâô])|[èêâôûçœëï]/giu;
 
-/** Titles plainly in Italian or French (two or more telltale words), out of place in a Spanish/English game. */
+const PT_WORDS =
+  /(?<!\p{L})(não|você|eu|meu|minha|nós|com|pra|pro|saudade|coração|então|muito|tudo|quando|mais|isso|esse|essa|um|vou|tô|tá|beijo|sem|sorriso|velho|fundo|além|é|viver|vivendo|mulher|outra|ninguém|céu|quero|tirar|corro|demais|sério|falando|darei|perfeito|emoções)(?!\p{L})|[ãõ]/giu;
+
+const count = (text, re) => (text.match(re) ?? []).length;
+// Accented vowels are shared with Portuguese, French and Italian: they only count as Spanish when
+// the title has nothing pointing to those.
+const SHARED_ACCENT = /[áéíóú]/gi;
+const spanishScore = (t) =>
+  count(t, ES_WORDS) - ([IT_WORDS, FR_WORDS, PT_WORDS].some((re) => count(t, re) > 0) ? count(t, SHARED_ACCENT) : 0);
+const withoutFeat = (title) => title.replace(/[\(\[](feat|ft|with|con)\b[^\)\]]*[\)\]]/gi, "");
+
+/** Titles plainly in Italian, French or Portuguese (two or more telltale signs), out of place in a Spanish/English game. */
 export function isForeignTitle(title) {
-  const t = title.replace(/\((feat|ft|with)[^)]*\)/gi, "");
-  const es = (t.match(ES_WORDS) ?? []).length;
-  return [IT_WORDS, FR_WORDS].some((re) => {
-    const n = (t.match(re) ?? []).length;
-    return n >= 2 && n > es;
+  const t = withoutFeat(title);
+  const es = spanishScore(t);
+  const en = count(t, EN_WORDS) + 4 * count(t, EN_CONTRACTION);
+  return [IT_WORDS, FR_WORDS, PT_WORDS].some((re) => {
+    const n = count(t, re);
+    return n >= 2 && n > es && n > en;
   });
 }
 
-/** Best guess of a song title's language ("es", "en" or "it"); null when the title says nothing. */
+/** Best guess of a song title's language ("es", "en", "it", "fr" or "pt"); null when the title says nothing. */
 export function titleLanguage(title) {
-  const t = title.replace(/\((feat|ft|with)[^)]*\)/gi, "");
+  const t = withoutFeat(title);
   const scores = {
-    es: (t.match(ES_WORDS) ?? []).length,
-    en: (t.match(EN_WORDS) ?? []).length + 4 * (t.match(EN_CONTRACTION) ?? []).length,
-    it: (t.match(IT_WORDS) ?? []).length,
+    es: spanishScore(t),
+    en: count(t, EN_WORDS) + 4 * count(t, EN_CONTRACTION),
+    it: count(t, IT_WORDS),
+    fr: count(t, FR_WORDS),
+    pt: count(t, PT_WORDS),
   };
   const [best, second] = Object.entries(scores).sort((a, b) => b[1] - a[1]);
   return best[1] === 0 || best[1] === second[1] ? null : best[0];
 }
 
-/** Italian singers with Spanish versions of their songs: only titles that read as Spanish are kept. */
-export const SPANISH_VERSIONS_ONLY = new Set(["Laura Pausini", "Eros Ramazzotti", "Nek", "Tiziano Ferro"]);
+/**
+ * Artists who also sing in a language outside the game: songs whose title (or, when the title says
+ * nothing, album) reads as another language are dropped.
+ */
+export const LANGUAGE_ONLY = {
+  "Laura Pausini": "es",
+  "Eros Ramazzotti": "es",
+  Nek: "es",
+  "Tiziano Ferro": "es",
+  "Roberto Carlos": "es",
+  "Céline Dion": "en",
+  Måneskin: "en",
+};
+
+/** Deezer artist ids for names that the search matched to another act ("Raphael" found the French singer). */
+export const ARTIST_IDS = {
+  Raphael: 5179221,
+};
+
+/**
+ * Hand-picked songs for artists whose Deezer top list misrepresents them (a new album taking every
+ * spot, or dozens of deep cuts). Matched by song title; nothing else of theirs enters the catalog.
+ */
+export const CURATED = {
+  NSQK: [
+    "¿Qué Tan Cerca Es Cerca?", "Lo Tuvimos Pero Ya No Está", "SAMSA", "Hombre De Bien", "Santurce",
+    "309", "De Vez en Cuando (Aparece)", "Tonos de Azul", "Árbol De Manzanas", "los alpes", "MIATA", "OTROS LUGARES",
+    "piel", "Fortnite", "No veo bien", "BAD INTENCIONES", "Año Bisiesto", "Continental", "Ya entregamos el depa",
+    "Corazón : Classics", "Algo Extraño", "El Tiempo Que Necesites", "Ojeras", "Dientes", "¿En Qué Momento?",
+    "Cuando Me Vaya", "Moldes", "Antagonista", "Bien Decía Mamá", "Clara",
+  ],
+  "Danny Ocean": [
+    "Me Rehúso", "Dembow", "Epa Wei", "Vuelve", "Swing", "Báilame", "Cuando Me Acerco A Ti", "Veneno", "Dime tú",
+    "Baby I Won't", "Tú no me conoces", "Fuera del mercado", "Volare", "Imagínate", "Priti", "Vitamina",
+    "Ley universal", "Desahógate",
+  ],
+};
 
 /** name → { language, genre } */
 export const ARTISTS = new Map();

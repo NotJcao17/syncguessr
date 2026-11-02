@@ -9,8 +9,13 @@ tipografía Archivo con eje de anchura e iconos Solar en estilo *broken*.
 - **Partida**: 5 canciones con los filtros que elijas. Puntos por pista (1000 en 0.1s … 200 en 15s),
   +10% por acierto seguido (hasta +50%) y un cuarto de los puntos si fallas la canción pero aciertas el artista.
   Guarda récord por mezcla de dificultad.
-- **Modo artista**: 5 canciones de los artistas elegidos, con récord por selección.
+- **Modo artista**: 5 canciones de los artistas elegidos, con récord por selección. Con **Solo hits** solo suenan
+  las 8 canciones más conocidas de cada artista (la mitad si tiene pocas) y pide al menos 15 en total.
 - **Libre**: sin fin, con filtros, racha y opción de quitar pistas.
+- **Modo fiesta**: la música suena solo en el dispositivo del host; los demás entran con un código de 4 letras y
+  adivinan desde su celular. Va por WebRTC con PeerJS (el broker público de PeerJS solo hace el primer contacto): el
+  navegador del host lleva la partida y revisa cada intento con el servidor, así que los invitados nunca ven el token
+  de la ronda. Cada pista abre un intento por jugador; la siguiente se abre sola cuando nadie puede seguir intentando.
 
 Las canciones escuchadas se guardan en el navegador y no se repiten hasta agotar la selección (salvo en el
 reto diario y los retos, que tienen que ser iguales para todos). Partida y modo artista generan **enlaces de reto**: la semilla hace que quien lo abra escuche exactamente las
@@ -40,11 +45,17 @@ género (pop, rock, urbano, y "regional, baladas y soul"); para sumar artistas b
 
 0. `0-expand.mjs`: trae de Deezer las canciones más escuchadas de cada artista (entre 12 y 45 por artista).
 1. `1-dedupe.mjs`: una sola grabación por canción; descarta en vivo, remixes, regrabaciones y demás versiones.
+   También descarta títulos en otros idiomas (francés, italiano, portugués), las canciones de otro idioma de los
+   artistas en `LANGUAGE_ONLY` y remixes sin paréntesis ("Macarena Bayside Boys Remix") cuando ya está la original.
+   `CURATED` fija a mano las canciones de artistas cuyo top de Deezer no los representa (NSQK, Danny Ocean) y
+   `ARTIST_IDS` corrige artistas que la búsqueda confundía con otro (Raphael).
 2. `2-enrich.mjs`: agrega canciones icónicas que falten (`iconic.mjs`), refresca datos de Deezer y busca el año
    original en MusicBrainz (1 petición por segundo, tarda ~1 h; todo queda en caché en `scripts/catalog/.cache/`).
 3. `3-build.mjs`: año y época reales y dificultad calculada combinando popularidad actual, fama del artista,
    posición de la canción en su discografía y antigüedad. Cada nivel tiene un tamaño fijo por idioma (fácil son unas
    1,100 canciones en inglés y 800 en español), con un mínimo por género para que cualquier filtro tenga fáciles.
+   De cada álbum de 2025 en adelante solo entran sus 5 canciones más escuchadas, para que un disco recién salido no
+   ocupe todo el catálogo de un artista. También guarda `top`, la posición de cada canción entre las de su artista.
 
 Los covers se quedan en el catálogo: adivinar el título correcto cuenta aunque elijas la versión de otro artista.
 

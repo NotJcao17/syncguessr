@@ -8,7 +8,7 @@ export function parseSource(raw: unknown): Source | null {
   if (obj.kind === "artists") {
     if (!Array.isArray(obj.artists)) return null;
     const artists = obj.artists.filter((a): a is string => typeof a === "string" && a.length < 120).slice(0, 20);
-    return artists.length ? { kind: "artists", artists } : null;
+    return artists.length ? { kind: "artists", artists, hits: obj.hits === true } : null;
   }
   if (obj.kind === "filters") return { kind: "filters", filters: sanitizeFilters(obj.filters) };
   return null;

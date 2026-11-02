@@ -68,6 +68,26 @@ for (const list of byArtist.values()) {
 }
 log.push(`year from MusicBrainz ${fromMb}, Deezer ${fromDz}, artist median/fallback ${fromArtist}`);
 
+// A new album streams far above an artist's older hits for a while: keep only its top songs so it
+// doesn't take over the artist (NSQK's 2026 album was most of their catalog).
+const NEW_RELEASE_YEAR = 2025;
+const PER_NEW_ALBUM = 5;
+const newAlbums = new Map();
+for (const t of tracks) {
+  if (t.iconic || t.year < NEW_RELEASE_YEAR) continue;
+  const key = `${t.artist}::${t.album}`;
+  if (!newAlbums.has(key)) newAlbums.set(key, []);
+  newAlbums.get(key).push(t);
+}
+const overflow = new Set();
+for (const list of newAlbums.values()) {
+  list.sort((a, b) => b.rank - a.rank);
+  for (const t of list.slice(PER_NEW_ALBUM)) overflow.add(t);
+}
+tracks = tracks.filter((t) => !overflow.has(t));
+for (const [artist, list] of byArtist) byArtist.set(artist, list.filter((t) => !overflow.has(t)));
+log.push(`new-album songs over the cap: ${overflow.size}`);
+
 const eraOf = (y) => (y < 1980 ? "pre-80" : y < 1990 ? "80s" : y < 2000 ? "90s" : y < 2010 ? "2000s" : y < 2020 ? "2010s" : "2020s");
 for (const t of tracks) t.era = eraOf(t.year);
 
@@ -99,6 +119,8 @@ for (const list of byArtist.values()) {
     const age = Math.max(0, Math.min(1, (2016 - t.year) / 40));
     t.score = 0.6 * (t.rank / 1e6) + 0.15 * peak + (0.15 * peak) / (1 + i * 0.6) + 0.1 * age;
   });
+  // Position among the artist's own songs (0 = best known), for artist mode's "only hits".
+  [...list].sort((a, b) => b.score - a.score).forEach((t, i) => (t.top = i));
 }
 
 // Covers and same-title songs stay: guessing the right title counts as correct (see /api/verify),
@@ -149,6 +171,7 @@ const out = tracks
     genre: t.genre,
     era: t.era,
     difficulty: t.difficulty,
+    top: t.top,
   }));
 
 writeFileSync("src/data/tracks.json", JSON.stringify(out));

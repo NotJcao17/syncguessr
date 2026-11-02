@@ -1,6 +1,6 @@
 // Step 1: merge the original catalog with the expansion and collapse every song to one recording.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { ARTISTS, ALIASES, BLOCKED, BILINGUAL, SPANISH_VERSIONS_ONLY, isForeignTitle, titleLanguage } from "./artists.mjs";
+import { ARTISTS, ALIASES, BLOCKED, BILINGUAL, CURATED, LANGUAGE_ONLY, isForeignTitle, titleLanguage } from "./artists.mjs";
 import { displayTitle, songKey, artistKey, isBadVersion, isRemix, isLiveAlbum } from "./normalize.mjs";
 
 // The pre-cleanup catalog is kept in the cache; without it the current catalog is re-processed.
@@ -30,6 +30,17 @@ const canonical = (artist) => {
 // "Color Esperanza 2020" is the same song as "Color Esperanza".
 const baseKey = (title) => songKey(title).replace(/\s(19|20)\d\d$/, "");
 
+// Artists with a single allowed language: the title decides, or the album when the title says nothing.
+// Spanish versions by Italian or Brazilian singers must read as Spanish (most of their catalog isn't);
+// English acts keep titles neither one can place ("SUPERMODEL" on "RUSH!").
+const outsideLanguage = (artist, title, album) => {
+  const only = LANGUAGE_ONLY[artist];
+  if (!only) return false;
+  const guessed = titleLanguage(title) ?? titleLanguage(album ?? "");
+  return only === "es" ? guessed !== "es" : Boolean(guessed) && guessed !== only;
+};
+const curatedKeys = Object.fromEntries(Object.entries(CURATED).map(([a, titles]) => [a, new Set(titles.map(baseKey))]));
+
 const groups = new Map();
 let dropped = 0;
 for (const t of tracks) {
@@ -39,7 +50,11 @@ for (const t of tracks) {
     continue;
   }
   const artist = canonical(t.artist);
-  if (isForeignTitle(original) || (SPANISH_VERSIONS_ONLY.has(artist) && titleLanguage(original) !== "es")) {
+  if (
+    isForeignTitle(original) ||
+    outsideLanguage(artist, original, t.album) ||
+    (curatedKeys[artist] && !curatedKeys[artist].has(baseKey(original)))
+  ) {
     dropped++;
     continue;
   }
@@ -68,7 +83,25 @@ for (const [key, list] of groups) {
   out.push({ ...best, rank, iconic, title: displayTitle(best.rawTitle), songKey: key.split("::")[0] });
 }
 
-writeFileSync(`${CACHE}/deduped.json`, JSON.stringify(out));
+// Remixes whose name doesn't use brackets ("Macarena Bayside Boys Remix", "Macarena River Re-Mix")
+// escape the grouping above: drop any version-tagged title that starts with another song of the artist.
+const VERSION_WORD = /\b(re-?mix|mix|mezcla|bpm|rework|bootleg|edit|versi[oó]n|version|remaster(ed)?)\b/i;
+const keysByArtist = new Map();
+for (const t of out) {
+  if (!keysByArtist.has(t.artist)) keysByArtist.set(t.artist, new Set());
+  keysByArtist.get(t.artist).add(t.songKey);
+}
+const variants = out.filter(
+  (t) =>
+    // Bracketed tags were already handled by the grouping; only the bare words count here.
+    VERSION_WORD.test(t.rawTitle.replace(/[\(\[][^\)\]]*[\)\]]/g, " ")) &&
+    [...keysByArtist.get(t.artist)].some((k) => k !== t.songKey && k.length >= 3 && t.songKey.startsWith(`${k} `))
+);
+const variantIds = new Set(variants.map((t) => t.id));
+const final = out.filter((t) => !variantIds.has(t.id));
+
+writeFileSync(`${CACHE}/deduped.json`, JSON.stringify(final));
+writeFileSync(`${CACHE}/variants.log`, variants.map((t) => `${t.artist} | ${t.rawTitle}`).join("\n"));
 console.log(
-  `in ${tracks.length} (expansion ${expanded.length}) | dropped ${dropped} | merged ${tracks.length - dropped - out.length} | out ${out.length}`
+  `in ${tracks.length} (expansion ${expanded.length}) | dropped ${dropped} | merged ${tracks.length - dropped - out.length} | variants ${variants.length} | out ${final.length}`
 );

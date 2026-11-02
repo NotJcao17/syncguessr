@@ -1,8 +1,8 @@
 // Step 0: grow the catalog from each artist's most played songs on Deezer.
 // Covers every artist in artists.mjs plus those already in the original catalog. Resumable and cached.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { ARTISTS, ALIASES, BLOCKED, BILINGUAL, titleLanguage } from "./artists.mjs";
-import { artistKey, isBadVersion, isLiveAlbum } from "./normalize.mjs";
+import { ARTISTS, ALIASES, ARTIST_IDS, BLOCKED, BILINGUAL, CURATED, titleLanguage } from "./artists.mjs";
+import { artistKey, isBadVersion, isLiveAlbum, songKey } from "./normalize.mjs";
 
 const CACHE = "scripts/catalog/.cache";
 mkdirSync(CACHE, { recursive: true });
@@ -48,6 +48,7 @@ console.log(`artists to expand: ${roster.size}`);
 
 // --- artist ids ---------------------------------------------------------------
 const ids = load("artist-ids.json", {});
+for (const [name, id] of Object.entries(ARTIST_IDS)) if (ids[name]?.id !== id) ids[name] = { id, fans: null };
 let n = 0;
 for (const name of roster.keys()) {
   if (name in ids) continue;
@@ -100,7 +101,10 @@ for (const [name, meta] of roster) {
   const songs = (tops[info.id] ?? [])
     .filter((d) => d.readable && d.preview && d.artistId === info.id && !isBadVersion(d.title) && !isLiveAlbum(d.album))
     .sort((a, b) => b.rank - a.rank);
-  const keep = songs.filter((d, i) => i < MIN_PER_ARTIST || d.rank >= MIN_RANK).slice(0, MAX_PER_ARTIST);
+  const curated = CURATED[name] && new Set(CURATED[name].map(songKey));
+  const keep = curated
+    ? songs.filter((d) => curated.has(songKey(d.title)))
+    : songs.filter((d, i) => i < MIN_PER_ARTIST || d.rank >= MIN_RANK).slice(0, MAX_PER_ARTIST);
   for (const d of keep) {
     const language = BILINGUAL.has(name) ? titleLanguage(d.title) ?? meta.language : meta.language;
     out.push({

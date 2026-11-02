@@ -11,7 +11,8 @@ export interface SearchBoxHandle {
 /**
  * Song autocomplete. The list stays open while the player replays the clip (clicks inside
  * any element marked `data-keep-search` don't close it); it closes on Escape, on picking a
- * song, or on clicking somewhere unrelated.
+ * song, or on tapping somewhere unrelated. On phones, hiding the keyboard (back gesture) or
+ * scrolling the page must not lose the list, so touch scrolls and Escape there don't close it.
  */
 export const SearchBox = forwardRef<
   SearchBoxHandle,
@@ -71,13 +72,14 @@ export const SearchBox = forwardRef<
   }, [query, language, artistKey, selected]);
 
   useEffect(() => {
-    const onPointer = (e: PointerEvent) => {
+    // "click" rather than "pointerdown": a finger that scrolls the page never fires a click.
+    const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (rootRef.current?.contains(target) || target.closest("[data-keep-search]")) return;
       setOpen(false);
     };
-    document.addEventListener("pointerdown", onPointer);
-    return () => document.removeEventListener("pointerdown", onPointer);
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
   }, []);
 
   // A new round clears the box.
@@ -119,7 +121,8 @@ export const SearchBox = forwardRef<
       if (open && active >= 0 && results[active]) choose(results[active]);
       else if (selected) submit();
       else if (open && results.length === 1) choose(results[0]);
-    } else if (e.key === "Escape" && open) {
+    } else if (e.key === "Escape" && open && !window.matchMedia("(pointer: coarse)").matches) {
+      // Some Android keyboards send Escape when they are dismissed with the back gesture.
       e.stopPropagation();
       setOpen(false);
     }
@@ -163,6 +166,8 @@ export const SearchBox = forwardRef<
             setSelected(null);
           }}
           onFocus={() => results.length && setOpen(true)}
+          // The input keeps focus after the keyboard is hidden, so a tap must reopen the list too.
+          onClick={() => results.length && setOpen(true)}
           onKeyDown={onKeyDown}
         />
         {query && !disabled && (

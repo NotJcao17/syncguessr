@@ -8,16 +8,18 @@ import { Icon } from "@/components/Icon";
 import { SetupLayout } from "@/components/SetupLayout";
 import { randomSeed } from "@/lib/rng";
 import { GAME_LENGTH, STAGES, formatPoints } from "@/lib/scoring";
-import { loadArtists, loadRecord, saveArtists } from "@/lib/storage";
-import { ArtistResult } from "@/lib/types";
+import { loadArtistHits, loadArtists, loadRecord, saveArtistHits, saveArtists } from "@/lib/storage";
+import { ArtistResult, HITS_PER_ARTIST, hitsFor, MIN_HIT_SONGS } from "@/lib/types";
 
-const recordKey = (artists: string[]) => `artista:${GAME_LENGTH}:${[...artists].sort().join("|")}`;
+const recordKey = (artists: string[], hits: boolean) =>
+  `artista:${GAME_LENGTH}:${[...artists].sort().join("|")}${hits ? ":hits" : ""}`;
 
 const listNames = (names: string[]) =>
   names.length <= 2 ? names.join(" y ") : `${names.slice(0, 2).join(", ")} y ${names.length - 2} más`;
 
 interface Game {
   artists: string[];
+  hits: boolean;
   seed: string;
   rival: number | null;
   challenge: boolean;
@@ -27,6 +29,7 @@ export function ArtistaGame() {
   const params = useSearchParams();
   const router = useRouter();
   const [artists, setArtists] = useState<ArtistResult[]>(loadArtists);
+  const [hitsOnly, setHitsOnly] = useState(loadArtistHits);
   const [game, setGame] = useState<Game | null>(null);
 
   const challenge = (() => {
@@ -34,12 +37,15 @@ export function ArtistaGame() {
     const names = (params.get("a") ?? "").split("|").filter(Boolean).slice(0, 20);
     if (!seed || names.length === 0) return null;
     const p = Number(params.get("p"));
-    return { seed, artists: names, rival: Number.isFinite(p) && p > 0 ? p : null };
+    return { seed, artists: names, hits: params.get("h") === "1", rival: Number.isFinite(p) && p > 0 ? p : null };
   })();
 
   const names = artists.map((a) => a.name);
   const namesKey = names.join("|");
-  const record = useMemo(() => (namesKey ? loadRecord(recordKey(namesKey.split("|"))) : null), [namesKey]);
+  const record = useMemo(
+    () => (namesKey ? loadRecord(recordKey(namesKey.split("|"), hitsOnly)) : null),
+    [namesKey, hitsOnly]
+  );
 
   const leaveChallenge = () => {
     if (challenge) router.replace("/artista");
@@ -49,25 +55,25 @@ export function ArtistaGame() {
     const challengeUrl =
       typeof window === "undefined"
         ? undefined
-        : `${window.location.origin}/artista?reto=${game.seed}&a=${encodeURIComponent(game.artists.join("|"))}`;
+        : `${window.location.origin}/artista?reto=${game.seed}&a=${encodeURIComponent(game.artists.join("|"))}${game.hits ? "&h=1" : ""}`;
     return (
       <GameScreen
         key={game.seed}
         config={{
           mode: "artista",
-          source: { kind: "artists", artists: game.artists },
+          source: { kind: "artists", artists: game.artists, hits: game.hits },
           count: GAME_LENGTH,
           seed: game.seed,
           avoidRepeats: !game.challenge,
         }}
         stages={[...STAGES]}
         title={listNames(game.artists)}
-        subtitle="Modo artista"
+        subtitle={game.hits ? "Modo artista · Solo hits" : "Modo artista"}
         searchLanguage="all"
         // The player already knows who sings, so the search only lists the chosen artists' songs.
         searchArtists={game.artists}
-        recordKey={recordKey(game.artists)}
-        summaryHeading={`Modo artista · ${listNames(game.artists)}`}
+        recordKey={recordKey(game.artists, game.hits)}
+        summaryHeading={`${game.hits ? "Solo hits" : "Modo artista"} · ${listNames(game.artists)}`}
         challengeUrl={challengeUrl}
         rival={game.rival}
         onAgain={() => {
@@ -95,7 +101,12 @@ export function ArtistaGame() {
             "Te retaron"
           )
         }
-        intro={<p>{GAME_LENGTH} canciones de {listNames(challenge.artists)}, las mismas que le tocaron a quien te retó.</p>}
+        intro={
+          <p>
+            {GAME_LENGTH} {challenge.hits ? "éxitos" : "canciones"} de {listNames(challenge.artists)}, las mismas que le tocaron a
+            quien te retó.
+          </p>
+        }
         footer={
           <div className="flex gap-3">
             <button type="button" className="btn btn-ghost" onClick={() => router.replace("/artista")}>
@@ -113,8 +124,9 @@ export function ArtistaGame() {
     );
   }
 
-  const totalSongs = artists.reduce((s, a) => s + a.songs, 0);
-  const canStart = artists.length > 0 && totalSongs >= GAME_LENGTH;
+  const totalSongs = artists.reduce((s, a) => s + (hitsOnly ? hitsFor(a.songs) : a.songs), 0);
+  const minSongs = hitsOnly ? MIN_HIT_SONGS : GAME_LENGTH;
+  const canStart = artists.length > 0 && totalSongs >= minSongs;
 
   return (
     <SetupLayout
@@ -127,8 +139,10 @@ export function ArtistaGame() {
               {artists.length === 0
                 ? "Elige al menos un artista"
                 : !canStart
-                  ? `Solo ${totalSongs} canciones: agrega otro artista`
-                  : `${totalSongs} canciones de ${artists.length} artista${artists.length > 1 ? "s" : ""}`}
+                  ? hitsOnly
+                    ? `${totalSongs} éxitos: agrega artistas hasta llegar a ${minSongs}`
+                    : `Solo ${totalSongs} canciones: agrega otro artista`
+                  : `${totalSongs} ${hitsOnly ? "éxitos" : "canciones"} de ${artists.length} artista${artists.length > 1 ? "s" : ""}`}
             </p>
             {artists.length > 0 && (
               <p className="mt-0.5 flex items-center gap-1.5 text-ink-3">
@@ -143,7 +157,7 @@ export function ArtistaGame() {
             disabled={!canStart}
             onClick={() => {
               saveArtists(artists);
-              setGame({ artists: names, seed: randomSeed(), rival: null, challenge: false });
+              setGame({ artists: names, hits: hitsOnly, seed: randomSeed(), rival: null, challenge: false });
             }}
           >
             Empezar
@@ -152,7 +166,27 @@ export function ArtistaGame() {
         </div>
       }
     >
-      <ArtistPicker value={artists} onChange={setArtists} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={hitsOnly}
+        onClick={() => {
+          setHitsOnly(!hitsOnly);
+          saveArtistHits(!hitsOnly);
+        }}
+        className="mb-6 flex w-full items-center gap-4 rounded-2xl bg-surface p-4 text-left"
+      >
+        <Icon name="star" className="size-6 shrink-0 text-indigo-soft" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold wide">Solo hits</span>
+          <span className="block text-sm text-ink-3">
+            Solo las {HITS_PER_ARTIST} canciones más conocidas de cada artista. Para jugar con muchos artistas sin toparte con
+            sus canciones de nicho.
+          </span>
+        </span>
+        <span className="switch" aria-hidden="true" />
+      </button>
+      <ArtistPicker value={artists} onChange={setArtists} hitsOnly={hitsOnly} />
     </SetupLayout>
   );
 }

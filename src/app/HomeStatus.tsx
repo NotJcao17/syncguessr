@@ -43,6 +43,7 @@ function ModeCard({
   text,
   meta,
   featured,
+  wide,
 }: {
   href: string;
   icon: IconName;
@@ -50,11 +51,13 @@ function ModeCard({
   text: string;
   meta?: string | null;
   featured?: boolean;
+  /** Spans both columns from `sm` up. */
+  wide?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className={`group flex min-h-[8.5rem] flex-col rounded-[24px] p-5 transition-[transform,background-color] duration-300 ease-[var(--ease-out-quint)] active:scale-[0.985] ${
+      className={`group flex min-h-[8.5rem] flex-col ${wide ? "sm:col-span-2" : ""} rounded-[24px] p-5 transition-[transform,background-color] duration-300 ease-[var(--ease-out-quint)] active:scale-[0.985] ${
         featured ? "bg-indigo-deep hover:bg-indigo" : "bg-surface hover:bg-surface-2"
       }`}
     >
@@ -70,7 +73,7 @@ function ModeCard({
   );
 }
 
-/** The four ways to play, each with its own progress at a glance. */
+/** The five ways to play, each with its own progress at a glance. */
 export function ModeGrid() {
   const snap = useSnapshot();
   const { daily, stats } = snap;
@@ -105,6 +108,13 @@ export function ModeGrid() {
         text="Sin fin y sin puntos, para practicar."
         meta={stats.bestFreeStreak > 0 ? `Mejor racha ${stats.bestFreeStreak}` : null}
       />
+      <ModeCard
+        href="/fiesta"
+        icon="users"
+        title="Modo fiesta"
+        text="Una bocina, varios celulares. Entran con un código y compiten en la misma sala."
+        wide
+      />
     </div>
   );
 }
@@ -116,6 +126,7 @@ export function ModeGridFallback() {
       {[0, 1, 2].map((i) => (
         <div key={i} className="h-[8.5rem] rounded-[24px] bg-surface" />
       ))}
+      <div className="h-[8.5rem] rounded-[24px] bg-surface sm:col-span-2" />
     </div>
   );
 }
