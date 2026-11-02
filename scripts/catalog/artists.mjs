@@ -270,7 +270,7 @@ export const ARTIST_IDS = {
 
 /**
  * Hand-picked songs for artists whose Deezer top list misrepresents them (a new album taking every
- * spot, or dozens of deep cuts). Matched by song title; nothing else of theirs enters the catalog.
+ * spot). Matched by song title; nothing else of theirs enters the catalog.
  * Songs missing from the artist's Deezer top list are searched for one by one.
  */
 export const CURATED = {
@@ -280,11 +280,6 @@ export const CURATED = {
     "Corazón : Classics", "OTROS LUGARES", "Árbol De Manzanas", "Tonos de Azul", "El Tiempo Que Necesites", "piel",
     "Cuando Me Vaya", "Moldes", "Algo Extraño", "Ojeras", "Dientes", "¿En Qué Momento?", "Antagonista",
     "¿Qué Tan Cerca Es Cerca?", "Lo Tuvimos Pero Ya No Está",
-  ],
-  "Danny Ocean": [
-    "Me Rehúso", "Dembow", "Epa Wei", "Swing", "Vuelve", "Báilame", "Cuando Me Acerco A Ti", "Fuera del mercado",
-    "Imagínate", "Priti", "Volare", "Tú no me conoces", "Veneno", "Dime tú", "Baby I Won't", "Vitamina",
-    "Ley universal", "Desahógate",
   ],
 };
 
