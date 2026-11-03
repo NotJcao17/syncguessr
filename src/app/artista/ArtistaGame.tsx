@@ -9,7 +9,7 @@ import { SetupLayout } from "@/components/SetupLayout";
 import { randomSeed } from "@/lib/rng";
 import { GAME_LENGTH, STAGES, formatPoints } from "@/lib/scoring";
 import { loadArtists, loadRecord, saveArtists } from "@/lib/storage";
-import { ArtistResult, HITS_PER_ARTIST, hitsFor, MIN_HIT_SONGS } from "@/lib/types";
+import { ArtistResult, HITS_PER_ARTIST, hitsFor, MAX_ARTISTS, MIN_HIT_SONGS } from "@/lib/types";
 
 const recordKey = (artists: string[], hits: boolean) =>
   `artista:${GAME_LENGTH}:${[...artists].sort().join("|")}${hits ? ":hits" : ""}`;
@@ -35,7 +35,7 @@ export function ArtistaGame() {
 
   const challenge = (() => {
     const seed = params.get("reto");
-    const names = (params.get("a") ?? "").split("|").filter(Boolean).slice(0, 20);
+    const names = (params.get("a") ?? "").split("|").filter(Boolean).slice(0, MAX_ARTISTS);
     if (!seed || names.length === 0) return null;
     const p = Number(params.get("p"));
     return { seed, artists: names, hits: params.get("h") === "1", rival: Number.isFinite(p) && p > 0 ? p : null };

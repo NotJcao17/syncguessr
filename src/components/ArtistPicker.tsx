@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArtistResult, hitsFor } from "@/lib/types";
+import { ArtistResult, hitsFor, MAX_ARTISTS } from "@/lib/types";
 import { Icon } from "./Icon";
-
-const MAX_ARTISTS = 20;
 
 /** Search the catalog's artists and build a selection of one or more. */
 export function ArtistPicker({
@@ -81,6 +79,9 @@ export function ArtistPicker({
         />
       </div>
 
+      {value.length >= MAX_ARTISTS && (
+        <p className="mt-3 text-sm font-semibold text-miss">Llegaste al máximo de {MAX_ARTISTS} artistas: quita uno para agregar otro.</p>
+      )}
       <p className="mt-4 text-sm font-semibold text-ink-3">{query.trim() ? "Resultados" : "Más escuchados del catálogo"}</p>
       {results.length === 0 ? (
         <p className="mt-3 text-ink-3">{query.trim() ? "No tenemos a ese artista en el catálogo." : "Cargando…"}</p>

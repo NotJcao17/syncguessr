@@ -1,7 +1,7 @@
 "use client";
 
 import { DEFAULT_FILTERS, sanitizeFilters } from "./filters";
-import { ArtistResult, Filters } from "./types";
+import { ArtistResult, Filters, MAX_ARTISTS } from "./types";
 
 /** Everything the player keeps lives in this browser. Every access is guarded: storage can be blocked. */
 
@@ -51,7 +51,7 @@ export const saveEnabledStages = (s: boolean[]) => write(KEYS.stages, s);
 
 export const loadArtists = (): ArtistResult[] => {
   const a = read<ArtistResult[]>(KEYS.artists, []);
-  return Array.isArray(a) ? a.filter((x) => x && typeof x.name === "string").slice(0, 20) : [];
+  return Array.isArray(a) ? a.filter((x) => x && typeof x.name === "string").slice(0, MAX_ARTISTS) : [];
 };
 export const saveArtists = (a: ArtistResult[]) => write(KEYS.artists, a);
 
