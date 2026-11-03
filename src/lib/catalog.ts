@@ -154,7 +154,8 @@ export function searchTracks(
 
     // Ranking depends only on the query text, never on the song being played.
     const titleScore = title === q ? 6 : title.startsWith(q) ? 4 : title.includes(q) ? 2 : 0;
-    const artistScore = artist === q ? 5 : artist.startsWith(q) ? 3 : artist.includes(q) ? 1 : 0;
+    // Any word of the name counts as naming the artist: "killers" is The Killers, "bunny" Bad Bunny.
+    const artistScore = artist === q ? 5 : artist.startsWith(q) || artist.includes(` ${q}`) ? 3 : artist.includes(q) ? 1 : 0;
     scored.push({ t: track, score: Math.max(titleScore, artistScore), byArtist: artistScore >= 3 });
   }
 
@@ -175,8 +176,11 @@ export function searchTracks(
   });
   // Searching an artist by name lists their whole catalog (A-Z), not just the first `limit` songs:
   // otherwise songs late in the alphabet ("Young Girls") could never be found that way.
-  const artistHits = unique.filter((r) => r.byArtist).length;
-  return unique.slice(0, Math.min(150, Math.max(limit, artistHits))).map(({ t }) => ({ id: t.id, title: t.title, artist: t.artist, cover: t.cover }));
+  // In artist mode the list is already limited to the chosen artists, so nothing is cut at all.
+  // Elsewhere the list reaches the artist's last song, even when other titles matched before theirs.
+  const throughArtist = unique.findLastIndex((r) => r.byArtist) + 1;
+  const max = artistSet ? unique.length : Math.min(150, Math.max(limit, throughArtist));
+  return unique.slice(0, max).map(({ t }) => ({ id: t.id, title: t.title, artist: t.artist, cover: t.cover }));
 }
 
 export function searchArtists(query: string, limit = 12): ArtistResult[] {
