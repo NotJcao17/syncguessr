@@ -5,7 +5,7 @@ import { ICONIC } from "./iconic.mjs";
 import { displayTitle, songKey, artistKey, isBadVersion, isRemix } from "./normalize.mjs";
 
 const CACHE = "scripts/catalog/.cache";
-const UA = "syncguessr-catalog/1.0 ( sixsementeam@gmail.com )";
+const UA = "syncguessr-catalog/1.0 ( https://github.com/NotJcao17/syncguessr )";
 const load = (name, fallback) => (existsSync(`${CACHE}/${name}`) ? JSON.parse(readFileSync(`${CACHE}/${name}`, "utf8")) : fallback);
 const save = (name, data) => writeFileSync(`${CACHE}/${name}`, JSON.stringify(data));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

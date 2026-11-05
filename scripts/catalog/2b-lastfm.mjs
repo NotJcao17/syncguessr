@@ -28,7 +28,8 @@ async function topTracks(artist) {
         await sleep(5000);
         continue;
       }
-      if (json.error) return {};
+      // 6: Last.fm doesn't know the artist. Anything else (bad key) must not be cached as "no songs".
+      if (json.error) return json.error === 6 ? {} : null;
       // Several Last.fm entries can be the same song (versions): keep the most listened one.
       const out = {};
       for (const t of json.toptracks?.track ?? []) {

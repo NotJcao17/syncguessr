@@ -73,9 +73,11 @@ log.push(`year from MusicBrainz ${fromMb}, Deezer ${fromDz}, artist median/fallb
 // doesn't take over the artist (NSQK's 2026 album was most of their catalog).
 const NEW_RELEASE_YEAR = 2025;
 const PER_NEW_ALBUM = 5;
+// Small catalogs are left alone: they have nothing to be crowded out, and re-uploads date old songs as new.
+const MIN_SONGS_FOR_CAP = 20;
 const newAlbums = new Map();
 for (const t of tracks) {
-  if (t.iconic || t.year < NEW_RELEASE_YEAR) continue;
+  if (t.iconic || t.year < NEW_RELEASE_YEAR || byArtist.get(t.artist).length < MIN_SONGS_FOR_CAP) continue;
   const key = `${t.artist}::${t.album}`;
   if (!newAlbums.has(key)) newAlbums.set(key, []);
   newAlbums.get(key).push(t);
