@@ -1,18 +1,21 @@
 import {
   ALL_DIFFICULTIES,
   ALL_ERAS,
+  ALL_GENRE_KEYS,
   ALL_GENRES,
   CatalogFacets,
   Difficulty,
   Era,
   Filters,
   Genre,
+  GENRES_BY_LANGUAGE,
+  GenreKey,
   LanguageFilter,
 } from "./types";
 
 export const DEFAULT_FILTERS: Filters = {
   language: "all",
-  genres: ALL_GENRES.map((g) => g.id),
+  genres: ALL_GENRE_KEYS,
   eras: ALL_ERAS.map((e) => e.id),
   difficulties: ["easy", "medium"],
 };
@@ -20,7 +23,7 @@ export const DEFAULT_FILTERS: Filters = {
 /** Daily challenge: well-known songs from every genre and decade, both languages. */
 export const DAILY_FILTERS: Filters = {
   language: "all",
-  genres: ALL_GENRES.map((g) => g.id),
+  genres: ALL_GENRE_KEYS,
   eras: ALL_ERAS.map((e) => e.id),
   difficulties: ["easy", "medium"],
 };
@@ -30,18 +33,37 @@ const pick = <T extends string>(value: unknown, allowed: readonly T[]): T[] => {
   return value.filter((v): v is T => allowed.includes(v as T));
 };
 
+/** The genre rows that apply to a language choice. */
+export const genreGroups = (language: LanguageFilter) =>
+  GENRES_BY_LANGUAGE.filter((g) => language === "all" || g.language === language);
+
+export const genreKeysFor = (language: LanguageFilter) => genreGroups(language).flatMap((g) => g.genres.map((x) => x.id));
+
+/** Saved filters and old challenge links name plain genres ("urban"), which meant both languages. */
+function readGenres(raw: unknown): GenreKey[] {
+  if (!Array.isArray(raw)) return [];
+  const keys = raw.flatMap((g): GenreKey[] => {
+    if (ALL_GENRE_KEYS.includes(g)) return [g];
+    return ALL_GENRES.includes(g as Genre) ? [`es:${g as Genre}`, `en:${g as Genre}`] : [];
+  });
+  return ALL_GENRE_KEYS.filter((k) => keys.includes(k));
+}
+
 /** Validates anything that claims to be Filters (localStorage, URLs, request bodies). */
 export function sanitizeFilters(raw: unknown): Filters {
   const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const language = (["es", "en", "all"] as const).includes(obj.language as LanguageFilter)
     ? (obj.language as LanguageFilter)
     : DEFAULT_FILTERS.language;
-  const genres = pick<Genre>(obj.genres, ALL_GENRES.map((g) => g.id));
+  const genres = readGenres(obj.genres);
+  const inLanguage = genreKeysFor(language);
   const eras = pick<Era>(obj.eras, ALL_ERAS.map((e) => e.id));
   const difficulties = pick<Difficulty>(obj.difficulties, ALL_DIFFICULTIES.map((d) => d.id));
   return {
     language,
-    genres: genres.length ? genres : DEFAULT_FILTERS.genres,
+    // Choices for the other language are kept for when it's selected again; a language with no
+    // genre on starts with all of them rather than an empty game.
+    genres: genres.some((g) => inLanguage.includes(g)) ? genres : [...new Set([...genres, ...inLanguage])],
     eras: eras.length ? eras : DEFAULT_FILTERS.eras,
     difficulties: difficulties.length ? difficulties : DEFAULT_FILTERS.difficulties,
   };
@@ -70,7 +92,7 @@ export function countSongs(facets: CatalogFacets, f: Filters): number {
   facets.languages.forEach((lang, li) => {
     if (f.language !== "all" && f.language !== lang) return;
     facets.genres.forEach((g, gi) => {
-      if (!f.genres.includes(g)) return;
+      if (!f.genres.includes(`${lang as "es" | "en"}:${g}`)) return;
       facets.eras.forEach((e, ei) => {
         if (!f.eras.includes(e)) return;
         facets.difficulties.forEach((d, di) => {
@@ -87,7 +109,13 @@ export function summarizeFilters(f: Filters): string {
   parts.push(f.language === "all" ? "Español e inglés" : f.language === "es" ? "Español" : "Inglés");
   const list = <T extends string>(sel: T[], all: { id: T; label: string }[], allLabel: string) =>
     sel.length === all.length ? allLabel : all.filter((x) => sel.includes(x.id)).map((x) => x.label).join(", ");
-  parts.push(list(f.genres, ALL_GENRES, "todos los géneros"));
+  const groups = genreGroups(f.language).map((g) => ({
+    ...g,
+    on: g.genres.filter((x) => f.genres.includes(x.id)).map((x) => x.label),
+  }));
+  if (groups.every((g) => g.on.length === g.genres.length)) parts.push("todos los géneros");
+  else if (groups.length === 1) parts.push(groups[0].on.join(", "));
+  else parts.push(groups.filter((g) => g.on.length).map((g) => `${g.label}: ${g.on.join(", ")}`).join("; "));
   parts.push(list(f.eras, ALL_ERAS, "todas las épocas"));
   parts.push(list(f.difficulties, ALL_DIFFICULTIES, "toda dificultad"));
   return parts.join(" · ");

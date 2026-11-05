@@ -9,6 +9,7 @@ import {
   ArtistResult,
   CatalogFacets,
   Filters,
+  GenreKey,
   hitsFor,
   Language,
   LanguageFilter,
@@ -68,7 +69,7 @@ export function titleKey(title: string): string {
 export function matchesFilters(t: Track, f: Filters): boolean {
   return (
     (f.language === "all" ? t.language === "es" || t.language === "en" : t.language === f.language) &&
-    f.genres.includes(t.genre) &&
+    f.genres.includes(`${t.language}:${t.genre}` as GenreKey) &&
     f.eras.includes(t.era) &&
     f.difficulties.includes(t.difficulty)
   );
@@ -234,7 +235,7 @@ let facetsCache: CatalogFacets | null = null;
 export function catalogFacets(): CatalogFacets {
   if (facetsCache) return facetsCache;
   const languages: Language[] = ["es", "en"];
-  const genres = ALL_GENRES.map((g) => g.id);
+  const genres = ALL_GENRES;
   const eras = ALL_ERAS.map((e) => e.id);
   const difficulties = ALL_DIFFICULTIES.map((d) => d.id);
   const counts = languages.map(() => genres.map(() => eras.map(() => difficulties.map(() => 0))));

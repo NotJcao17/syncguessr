@@ -1,18 +1,19 @@
 "use client";
 
-import { countSongs } from "@/lib/filters";
-import { ALL_DIFFICULTIES, ALL_ERAS, ALL_GENRES, CatalogFacets, Filters, LANGUAGES } from "@/lib/types";
+import { countSongs, genreGroups, genreKeysFor, sanitizeFilters } from "@/lib/filters";
+import { ALL_DIFFICULTIES, ALL_ERAS, CatalogFacets, Filters, GenreKey, LANGUAGES, LanguageFilter } from "@/lib/types";
 
 /** Below this a selection repeats songs too soon to be fun. */
 export const MIN_SONGS = 20;
 
-type ListKey = "genres" | "eras" | "difficulties";
+type ListKey = "eras" | "difficulties";
 
 const nf = new Intl.NumberFormat("es-MX");
 
 /**
  * Language, difficulty, genre and decade pickers. Each chip shows how many songs that option
  * brings with the rest of the selection, so empty combinations are visible before playing.
+ * Genres come per language: with both languages on there is one row for each.
  */
 export function FilterPanel({
   value,
@@ -24,6 +25,7 @@ export function FilterPanel({
   facets: CatalogFacets | null;
 }) {
   const count = (f: Filters) => (facets ? countSongs(facets, f) : null);
+  const withLanguage = (language: LanguageFilter) => sanitizeFilters({ ...value, language });
 
   const toggle = <K extends ListKey>(key: K, id: Filters[K][number]) => {
     const list = value[key] as string[];
@@ -72,13 +74,60 @@ export function FilterPanel({
     );
   };
 
+  const inLanguage = genreKeysFor(value.language);
+  const otherLanguage = value.genres.filter((g) => !inLanguage.includes(g));
+  const allGenres = inLanguage.every((g) => value.genres.includes(g));
+  const toggleGenre = (id: GenreKey) => {
+    const next = value.genres.includes(id) ? value.genres.filter((g) => g !== id) : [...value.genres, id];
+    if (next.some((g) => inLanguage.includes(g))) onChange({ ...value, genres: next });
+  };
+
+  const genres = (
+    <fieldset className="mt-6">
+      <div className="flex items-baseline justify-between gap-3">
+        <legend className="text-[0.95rem] font-bold wide">Género</legend>
+        <button
+          type="button"
+          className="text-sm font-semibold text-indigo-soft hover:text-ink"
+          onClick={() => onChange({ ...value, genres: [...otherLanguage, ...(allGenres ? [inLanguage[0]] : inLanguage)] })}
+        >
+          {allGenres ? "Solo una" : "Todas"}
+        </button>
+      </div>
+      {genreGroups(value.language).map((group) => (
+        <div key={group.language} className="mt-3">
+          {value.language === "all" && <p className="mb-2 text-sm font-semibold text-ink-3">{group.label}</p>}
+          <div className="flex flex-wrap gap-2">
+            {group.genres.map((g) => {
+              const on = value.genres.includes(g.id);
+              const n = count({ ...value, genres: [g.id] });
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  className="chip"
+                  aria-pressed={on}
+                  onClick={() => toggleGenre(g.id)}
+                  disabled={!on && n === 0}
+                >
+                  {g.label}
+                  {n !== null && <span className="count">{nf.format(n)}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </fieldset>
+  );
+
   return (
     <div>
       <fieldset>
         <legend className="text-[0.95rem] font-bold wide">Idioma</legend>
         <div className="mt-3 flex flex-wrap gap-2" role="radiogroup">
           {LANGUAGES.map((l) => {
-            const n = count({ ...value, language: l.id });
+            const n = count(withLanguage(l.id));
             return (
               <button
                 key={l.id}
@@ -86,7 +135,7 @@ export function FilterPanel({
                 role="radio"
                 className="chip"
                 aria-checked={value.language === l.id}
-                onClick={() => onChange({ ...value, language: l.id })}
+                onClick={() => onChange(withLanguage(l.id))}
               >
                 {l.label}
                 {n !== null && <span className="count">{nf.format(n)}</span>}
@@ -96,7 +145,7 @@ export function FilterPanel({
         </div>
       </fieldset>
       {group("difficulties", "Dificultad", ALL_DIFFICULTIES)}
-      {group("genres", "Género", ALL_GENRES)}
+      {genres}
       {group("eras", "Época", ALL_ERAS)}
     </div>
   );

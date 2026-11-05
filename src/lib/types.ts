@@ -5,12 +5,38 @@ export type Genre = "pop" | "rock" | "urban" | "classics";
 export type Era = "pre-80" | "80s" | "90s" | "2000s" | "2010s" | "2020s";
 export type Difficulty = "easy" | "medium" | "hard" | "expert";
 
-export const ALL_GENRES: { id: Genre; label: string }[] = [
-  { id: "pop", label: "Pop" },
-  { id: "rock", label: "Rock" },
-  { id: "urban", label: "Urbano y hip-hop" },
-  { id: "classics", label: "Clásicos y baladas" },
+export const ALL_GENRES: Genre[] = ["pop", "rock", "urban", "classics"];
+
+/**
+ * The same genre means different music in each language (urban is reggaetón in Spanish, hip-hop in
+ * English), so filters pick them per language: "es:urban".
+ */
+export type GenreKey = `${"es" | "en"}:${Genre}`;
+
+export const GENRES_BY_LANGUAGE: { language: "es" | "en"; label: string; genres: { id: GenreKey; label: string }[] }[] = [
+  {
+    language: "es",
+    label: "En español",
+    genres: [
+      { id: "es:pop", label: "Pop" },
+      { id: "es:rock", label: "Rock" },
+      { id: "es:urban", label: "Urbano" },
+      { id: "es:classics", label: "Regional y baladas" },
+    ],
+  },
+  {
+    language: "en",
+    label: "En inglés",
+    genres: [
+      { id: "en:pop", label: "Pop" },
+      { id: "en:rock", label: "Rock" },
+      { id: "en:urban", label: "Hip-hop y R&B" },
+      { id: "en:classics", label: "Soul y clásicos" },
+    ],
+  },
 ];
+
+export const ALL_GENRE_KEYS: GenreKey[] = GENRES_BY_LANGUAGE.flatMap((g) => g.genres.map((x) => x.id));
 
 export const ALL_ERAS: { id: Era; label: string }[] = [
   { id: "pre-80", label: "Antes de los 80" },
@@ -65,7 +91,7 @@ export const MIN_HIT_SONGS = 15;
 
 export interface Filters {
   language: LanguageFilter;
-  genres: Genre[];
+  genres: GenreKey[];
   eras: Era[];
   difficulties: Difficulty[];
 }
