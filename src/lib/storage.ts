@@ -14,6 +14,7 @@ const KEYS = {
   records: "syncguessr:records",
   daily: "syncguessr:daily",
   artists: "syncguessr:artists",
+  artistSets: "syncguessr:artist-sets",
 } as const;
 
 function read<T>(key: string, fallback: T): T {
@@ -54,6 +55,17 @@ export const loadArtists = (): ArtistResult[] => {
   return Array.isArray(a) ? a.filter((x) => x && typeof x.name === "string").slice(0, MAX_ARTISTS) : [];
 };
 export const saveArtists = (a: ArtistResult[]) => write(KEYS.artists, a);
+
+/** Named artist selections, to switch between them without picking one by one. */
+export interface ArtistSet {
+  name: string;
+  artists: ArtistResult[];
+}
+export const loadArtistSets = (): ArtistSet[] => {
+  const sets = read<ArtistSet[]>(KEYS.artistSets, []);
+  return Array.isArray(sets) ? sets.filter((s) => s && typeof s.name === "string" && Array.isArray(s.artists)) : [];
+};
+export const saveArtistSets = (sets: ArtistSet[]) => write(KEYS.artistSets, sets);
 
 // --- Played history (free mode avoids repeats) ---------------------------------
 

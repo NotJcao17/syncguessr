@@ -14,6 +14,7 @@ import {
   peerIdFor,
   randomCode,
 } from "@/lib/party";
+import { reportGamePlayed } from "@/lib/plays";
 import { randomSeed } from "@/lib/rng";
 import { ARTIST_SHARE, STAGE_POINTS, STAGES } from "@/lib/scoring";
 import { LanguageFilter, RevealedTrack, RoundTicket, SearchResultItem, Source, VerifyResponse } from "@/lib/types";
@@ -250,6 +251,7 @@ export function usePartyHost(hostName: string) {
     else {
       g.phase = "final";
       audioEngine.stop();
+      reportGamePlayed();
       publish();
     }
   }, [publish, startRound]);

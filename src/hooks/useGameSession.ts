@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { audioEngine } from "@/lib/audioEngine";
+import { reportGamePlayed } from "@/lib/plays";
 import { scoreRound } from "@/lib/scoring";
 import {
   addToHistory,
@@ -152,6 +153,7 @@ export function useGameSession(config: SessionConfig) {
       if (count !== null && all.length >= count) {
         const total = all.reduce((sum, o) => sum + o.points, 0);
         recordGameFinished();
+        reportGamePlayed();
         const r = recordKey ? submitScore(recordKey, total) : { previous: null, isRecord: false };
         setResult({ record: r.previous, isRecord: r.isRecord });
         onFinished?.(all, total);

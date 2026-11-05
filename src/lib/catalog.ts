@@ -112,11 +112,43 @@ export function pickRound(
 }
 
 /**
+ * Artist mode: the artists were chosen by hand, so each one gets the same turns however many songs
+ * it has or how many of them were heard before. Filtering the history out of the whole pool instead
+ * starved artists played in earlier games: with all their songs heard, they never came up again
+ * until every other artist ran out. The history only decides which song of the artist plays:
+ * an unheard one, or else one of those heard longest ago.
+ */
+function pickByArtist(all: Track[], count: number, rand: () => number, exclude: number[]): Track[] {
+  const heardAt = new Map(exclude.map((id, i) => [id, i]));
+  const left = new Map<string, Track[]>();
+  for (const t of all) left.set(t.artist, [...(left.get(t.artist) ?? []), t]);
+  const turns = new Map([...left.keys()].map((a) => [a, 0]));
+  const chosen: Track[] = [];
+  while (chosen.length < count && left.size > 0) {
+    const artists = [...left.keys()];
+    const fewest = Math.min(...artists.map((a) => turns.get(a)!));
+    const due = artists.filter((a) => turns.get(a) === fewest);
+    const artist = due[Math.floor(rand() * due.length)];
+    const songs = left.get(artist)!;
+    const unheard = songs.filter((t) => !heardAt.has(t.id));
+    const oldestFirst = [...songs].sort((a, b) => heardAt.get(a.id)! - heardAt.get(b.id)!);
+    const from = unheard.length ? unheard : oldestFirst.slice(0, Math.ceil(songs.length / 2));
+    const track = from[Math.floor(rand() * from.length)];
+    chosen.push(track);
+    turns.set(artist, fewest + 1);
+    if (songs.length > 1) left.set(artist, songs.filter((t) => t.id !== track.id));
+    else left.delete(artist);
+  }
+  return chosen;
+}
+
+/**
  * Deterministic game: the same seed, source and exclusions always give the same songs in the same
  * order. Recently heard songs are skipped while the pool still has enough without them.
  */
 export function pickGame(source: Source, count: number, seed: string, exclude: number[] = []): Track[] {
   const all = eligibleTracks(source).sort((a, b) => a.id - b.id);
+  if (source.kind === "artists") return pickByArtist(all, count, seededRandom(seed), exclude);
   const excluded = new Set(exclude);
   const fresh = all.filter((t) => !excluded.has(t.id));
   const pool = fresh.length >= count ? fresh : all;

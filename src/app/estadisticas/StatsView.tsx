@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { STAGES, formatPoints } from "@/lib/scoring";
 import { HighScore, loadRecords, loadStats, resetStats, Stats } from "@/lib/storage";
@@ -22,6 +22,28 @@ function describeRecord(key: string) {
   };
 }
 
+/** Games finished by everyone, across all devices. Stays hidden if the counter can't be reached. */
+function GlobalPlays() {
+  const [plays, setPlays] = useState<number | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/plays", { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setPlays(typeof d?.plays === "number" ? d.plays : null))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  if (plays === null) return null;
+  return (
+    <p className="mt-2 flex items-center gap-2 rounded-2xl bg-surface px-4 py-3 text-sm text-ink-2">
+      <Icon name="users" className="size-5 shrink-0 text-indigo-soft" />
+      <span>
+        <span className="font-bold text-ink tabular-nums">{formatPoints(plays)}</span> partidas jugadas en syncguessr entre todos
+      </span>
+    </p>
+  );
+}
+
 export function StatsView() {
   const [stats, setStats] = useState<Stats>(loadStats);
   const [records] = useState<[string, HighScore][]>(() =>
@@ -40,6 +62,7 @@ export function StatsView() {
         </Link>
         <p className="font-bold wide">Estadísticas</p>
       </header>
+      <GlobalPlays />
 
       {stats.rounds === 0 ? (
         <div className="mt-10">

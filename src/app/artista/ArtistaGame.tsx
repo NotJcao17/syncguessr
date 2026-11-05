@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ArtistPicker } from "@/components/ArtistPicker";
+import { ArtistSets } from "@/components/ArtistSets";
 import { GameScreen } from "@/components/GameScreen";
 import { Icon } from "@/components/Icon";
 import { SetupLayout } from "@/components/SetupLayout";
@@ -184,6 +185,7 @@ export function ArtistaGame() {
         </span>
         <span className="switch" aria-hidden="true" />
       </button>
+      <ArtistSets selection={artists} onLoad={setArtists} />
       <ArtistPicker value={artists} onChange={setArtists} hitsOnly={hitsOnly} />
     </SetupLayout>
   );

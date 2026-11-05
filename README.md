@@ -18,7 +18,13 @@ tipografía Archivo con eje de anchura e iconos Solar en estilo *broken*.
   de la ronda. Cada pista abre un intento por jugador; la siguiente se abre sola cuando nadie puede seguir intentando.
 
 Las canciones escuchadas se guardan en el navegador y no se repiten hasta agotar la selección (salvo en el
-reto diario y los retos, que tienen que ser iguales para todos). Partida y modo artista generan **enlaces de reto**: la semilla hace que quien lo abra escuche exactamente las
+reto diario y los retos, que tienen que ser iguales para todos). En modo artista cada artista elegido tiene los mismos
+turnos y el historial solo decide qué canción suya suena, para que los ya jugados no dejen de salir; las selecciones se
+pueden guardar con nombre en el navegador.
+
+El contador global de partidas de Estadísticas vive en [Abacus](https://abacus.jasoncameron.dev), una API pública de
+contadores, porque el proyecto no tiene base de datos (`/api/plays`). Suma una partida al terminar una partida, un reto
+diario, un modo artista o un modo fiesta; Libre no cuenta porque no termina. Partida y modo artista generan **enlaces de reto**: la semilla hace que quien lo abra escuche exactamente las
 mismas canciones e intente superar tu puntuación.
 
 ## Desarrollo
