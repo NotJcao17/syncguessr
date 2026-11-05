@@ -1,7 +1,7 @@
 // Step 3: turn the enriched cache into src/data/tracks.json.
 // Works offline from whatever steps 1-2 cached; missing data falls back gracefully.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { ARTISTS } from "./artists.mjs";
+import { ARTISTS, NO_NEW_ALBUM_CAP } from "./artists.mjs";
 import { artistKey } from "./normalize.mjs";
 
 const CACHE = "scripts/catalog/.cache";
@@ -77,7 +77,8 @@ const PER_NEW_ALBUM = 5;
 const MIN_SONGS_FOR_CAP = 20;
 const newAlbums = new Map();
 for (const t of tracks) {
-  if (t.iconic || t.year < NEW_RELEASE_YEAR || byArtist.get(t.artist).length < MIN_SONGS_FOR_CAP) continue;
+  if (t.iconic || t.year < NEW_RELEASE_YEAR || NO_NEW_ALBUM_CAP.has(t.artist)) continue;
+  if (byArtist.get(t.artist).length < MIN_SONGS_FOR_CAP) continue;
   const key = `${t.artist}::${t.album}`;
   if (!newAlbums.has(key)) newAlbums.set(key, []);
   newAlbums.get(key).push(t);

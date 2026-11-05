@@ -268,6 +268,9 @@ export const ARTIST_IDS = {
   Raphael: 5179221,
 };
 
+/** Artists whose career is mostly recent albums: the cap on new albums would gut their catalog. */
+export const NO_NEW_ALBUM_CAP = new Set(["Victor Mendivil"]);
+
 /**
  * Hand-picked songs for artists whose Deezer top list misrepresents them (a new album taking every
  * spot). Matched by song title; nothing else of theirs enters the catalog.
