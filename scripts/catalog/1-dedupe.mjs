@@ -1,6 +1,6 @@
 // Step 1: merge the original catalog with the expansion and collapse every song to one recording.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { ARTISTS, ALIASES, BLOCKED, BILINGUAL, CURATED, LANGUAGE_ONLY, isForeignTitle, titleLanguage } from "./artists.mjs";
+import { ARTISTS, ALIASES, BLOCKED, BILINGUAL, CURATED, LANGUAGE_ONLY, SONG_LANGUAGE, isForeignTitle, titleLanguage } from "./artists.mjs";
 import { displayTitle, songKey, artistKey, isBadVersion, isRemix, isLiveAlbum } from "./normalize.mjs";
 
 // The pre-cleanup catalog is kept in the cache; without it the current catalog is re-processed.
@@ -60,9 +60,8 @@ for (const t of tracks) {
   }
   const listed = ARTISTS.get(artist);
   const guessed = titleLanguage(original);
-  const language = BILINGUAL.has(artist) && (guessed === "es" || guessed === "en")
-    ? guessed
-    : listed?.language ?? t.language;
+  const language = SONG_LANGUAGE[`${artist}::${displayTitle(original)}`] ??
+    (BILINGUAL.has(artist) && (guessed === "es" || guessed === "en") ? guessed : listed?.language ?? t.language);
   const genre = listed?.genre ?? (t.genre === "hiphop" ? "urban" : t.genre);
   const key = `${baseKey(original)}::${artistKey(artist)}`;
   if (!groups.has(key)) groups.set(key, []);

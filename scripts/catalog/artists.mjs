@@ -31,7 +31,7 @@ const GROUPS = {
     Presuntos Implicados; Ella Baila Sola; Nena Daconte; Despistaos; Carlos Baute; La Quinta Estación;
     Natalia Jiménez; Leonel García; Noel Schajris; Draco Rosa; María José; Paty Cantú; Miranda!; Tan Biónica;
     C. Tangana; Omar Montes; Dani Fernández; Sebastián Yatra; Piso 21; Mau y Ricky; Reik; Gloria Estefan; Jennifer Lopez; Kali Uchis;
-    Nathy Peluso; Rombai; Emmanuel Horvilleur`,
+    Nathy Peluso; Rombai; Emmanuel Horvilleur; Humbe`,
 
   "es:rock": `Maná; Soda Stereo; Gustavo Cerati; Los Prisioneros; Caifanes; Jaguares; Café Tacvba; Molotov; Zoé;
     Los Enanitos Verdes; Héroes del Silencio; Bunbury; Hombres G; Duncan Dhu; Mikel Erentxun; Los Fabulosos Cadillacs;
@@ -46,7 +46,7 @@ const GROUPS = {
     Radio Futura; Los Secretos; Nacha Pop; El Último de la Fila; Manolo García; Fito & Fitipaldis; Platero y Tú;
     M-Clan; Mägo de Oz; Barricada; Leiva; Supersubmarina; Sidecars; Los Planetas; Café Quijano; Joaquín Sabina;
     Seguridad Social; Medina Azahara; La Gusana Ciega; El Gran Silencio; Los Amigos Invisibles; Los Caligaris;
-    Estelares; Los Látigos; Coda; Saúl Hernández`,
+    Estelares; Los Látigos; Coda; Saúl Hernández; Ed Maverick`,
 
   "es:classics": `José José; Juan Gabriel; Rocío Dúrcal; Rocío Jurado; Raphael; Camilo Sesto; Julio Iglesias; José Luis Perales;
     Nino Bravo; Joan Manuel Serrat; Leo Dan; Sandro; Palito Ortega; Los Ángeles Negros; Los Pasteles Verdes;
@@ -123,7 +123,8 @@ const GROUPS = {
     The Hives; Jet; The Vines; Wolfmother; Modest Mouse; The Shins; Death Cab for Cutie; Fleet Foxes; The National;
     Arctic Monkeys; Beck; Spin Doctors; The Proclaimers; The Romantics; The Knack; Steve Miller Band; Bachman-Turner Overdrive;
     Santana; Thin Lizzy; Free; Bad Company; Styx; Kansas; Heart; Cheap Trick; Status Quo; The Zombies; The Hollies; The Monkees;
-    The Turtles; The Mamas & The Papas; The Byrds; Jefferson Airplane; Janis Joplin; Neil Young; The Band; Steppenwolf`,
+    The Turtles; The Mamas & The Papas; The Byrds; Jefferson Airplane; Janis Joplin; Neil Young; The Band; Steppenwolf;
+    The Warning`,
 
   "en:urban": `Eminem; Drake; Kendrick Lamar; Kanye West; Travis Scott; Post Malone; Nicki Minaj; Cardi B; Doja Cat; SZA;
     Frank Ocean; Tyler, The Creator; Childish Gambino; J. Cole; Kid Cudi; Logic; Mac Miller; A$AP Rocky; Juice WRLD;
@@ -197,7 +198,7 @@ export const BILINGUAL = new Set([
   "Gloria Estefan", "Christina Aguilera", "Marc Anthony", "Selena", "Becky G", "Kali Uchis", "Julio Iglesias",
   "Thalía", "Paulina Rubio", "Luis Fonsi", "Prince Royce", "Romeo Santos", "Nelly Furtado", "Draco Rosa",
   "Laura Pausini", "Eros Ramazzotti", "Chayanne", "Selena Gomez", "Gipsy Kings", "Natti Natasha", "Anitta",
-  "Alejandro Sanz", "Juanes", "Los Del Río", "Ritchie Valens",
+  "Alejandro Sanz", "Juanes", "Los Del Río", "Ritchie Valens", "The Warning",
 ]);
 
 const ES_WORDS =
@@ -264,6 +265,11 @@ export const LANGUAGE_ONLY = {
 };
 
 /** Deezer artist ids for names that the search matched to another act ("Raphael" found the French singer). */
+/** Bilingual artists' songs whose title is too short to tell the language ("artist::title"). */
+export const SONG_LANGUAGE = {
+  "The Warning::Narcisista": "es",
+};
+
 export const ARTIST_IDS = {
   Raphael: 5179221,
 };
