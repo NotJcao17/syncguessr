@@ -102,10 +102,7 @@ class AudioEngine {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 1200));
-          // /api/stream redirects to Deezer's CDN; if that failed, the retry asks the server to
-          // fetch the file itself, which is slower but doesn't depend on the CDN answering us.
-          const target = attempt > 0 && url.startsWith("/api/stream?") ? `${url}&proxy=1` : url;
-          const res = await fetch(target);
+          const res = await fetch(url);
           if (!res.ok) continue;
           const bytes = await res.arrayBuffer();
           const buffer = await this.ensureContext().decodeAudioData(bytes);

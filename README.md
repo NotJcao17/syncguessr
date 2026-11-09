@@ -118,9 +118,7 @@ There are no accounts and no database: progress, records and stats live in the b
 
 ### Fair play
 - 🔐 Round tokens are **encrypted on the server** (`SYNCGUESSR_SECRET`), so the browser never sees
-  the Deezer id of the song that is playing. `/api/stream` turns the token into a redirect to the
-  signed preview on Deezer's CDN (served from near the player); `proxy=1` makes the server fetch it
-  instead, which the audio engine uses as its retry and `/diagnostico` uses to time the server.
+  the Deezer id of the song that is playing; audio goes through a server proxy.
 - 🎵 In playlist mode the song list is also sealed: the browser gets the playlist's name, cover and
   size, and carries an encrypted list it can't read. Each round the server picks a song and, for
   Spotify, finds it on Deezer (same title, one of the same artists, closest length, no live or

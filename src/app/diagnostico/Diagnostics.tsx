@@ -64,8 +64,7 @@ export function Diagnostics() {
         setSamples((s) => [...s, { round: t1 - t0, total: 0, api: null, audio: null, quota: 0, fallback: false, cache: "-", status: 0 }]);
         continue;
       }
-      // proxy=1: the game is redirected to Deezer's CDN, but here the server's own timings are the point.
-      const res = await fetch(`/api/stream?t=${encodeURIComponent(ticket.token)}&proxy=1`, { cache: "no-store" }).catch(() => null);
+      const res = await fetch(`/api/stream?t=${encodeURIComponent(ticket.token)}`, { cache: "no-store" }).catch(() => null);
       if (res) await res.arrayBuffer().catch(() => null);
       const t2 = performance.now();
       const timing = parseServerTiming(res?.headers.get("Server-Timing") ?? null);
