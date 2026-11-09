@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTrack, titleKey } from "@/lib/catalog";
 import { openTrackToken } from "@/lib/token";
 
-// Deezer preview URLs are signed and expire, so each one is resolved fresh and the audio proxied.
+// Deezer preview URLs are signed and expire, so each one is resolved fresh (see GET below).
 const audioCache = new Map<number, { buffer: ArrayBuffer; at: number }>();
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 120;
@@ -116,10 +116,61 @@ const audioResponse = (buffer: ArrayBuffer, timing: Timing | null) =>
 const failure = (message: string, status: number, timing: Timing) =>
   new NextResponse(message, { status, headers: timingHeaders(timing) });
 
+/** Resolved preview URLs, until shortly before their signature expires. */
+const urlCache = new Map<number, { url: string; expires: number }>();
+const URL_CACHE_MAX = 500;
+
+/** Deezer signs preview URLs with `exp=<unix seconds>`; without one, assume ten minutes. */
+const expiryOf = (url: string) => {
+  const exp = Number(url.match(/exp=(\d+)/)?.[1]);
+  return Number.isFinite(exp) && exp > 0 ? exp * 1000 : Date.now() + 10 * 60 * 1000;
+};
+
+/**
+ * By default the browser is redirected to Deezer's CDN, which serves the file from near the player
+ * (and allows any origin). Proxying meant the 480 KB went Deezer → Paris → the player's edge → the
+ * player, which is several times slower far from Paris. The token still hides the track id: the
+ * CDN URL is a signed hash, and the full preview was already reachable through this route anyway.
+ * `proxy=1` keeps the old path: the audio engine falls back to it if the redirect fails, and
+ * /diagnostico uses it to time the server.
+ */
 export async function GET(request: NextRequest) {
   const trackId = openTrackToken(request.nextUrl.searchParams.get("t"));
   if (trackId === null) return new NextResponse("Ronda inválida", { status: 400 });
+  if (request.nextUrl.searchParams.get("proxy") !== "1") return redirectToCdn(trackId);
+  return proxy(trackId);
+}
 
+async function redirectToCdn(trackId: number) {
+  const hit = urlCache.get(trackId);
+  if (hit && hit.expires - 60_000 > Date.now()) return redirect(hit.url, null);
+
+  const timing: Timing = { api: 0, audio: 0, quota: 0, fallback: false };
+  try {
+    const url = await previewUrl(trackId, timing);
+    if (!url) {
+      console.warn(`[stream] track ${trackId}: no preview available (quota hits: ${timing.quota})`);
+      return failure("Sin vista previa", 404, timing);
+    }
+    urlCache.delete(trackId);
+    urlCache.set(trackId, { url, expires: expiryOf(url) });
+    if (urlCache.size > URL_CACHE_MAX) urlCache.delete(urlCache.keys().next().value!);
+    return redirect(url, timing);
+  } catch (err) {
+    console.warn(`[stream] track ${trackId}:`, err instanceof Error ? err.message : err);
+    return failure("Error de audio", 502, timing);
+  }
+}
+
+function redirect(url: string, timing: Timing | null) {
+  const res = NextResponse.redirect(url, 302);
+  // Every round has its own token; caching the redirect would only outlive the signature.
+  res.headers.set("Cache-Control", "no-store");
+  for (const [k, v] of Object.entries(timingHeaders(timing))) res.headers.set(k, v);
+  return res;
+}
+
+async function proxy(trackId: number) {
   const cached = audioCache.get(trackId);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return audioResponse(cached.buffer, null);
 

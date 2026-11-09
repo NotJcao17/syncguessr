@@ -73,8 +73,9 @@ export default function PrivacyPage() {
             <strong>Vercel:</strong> aloja el sitio y su servidor, que puede estar fuera de México.
           </li>
           <li>
-            <strong>Deezer:</strong> las portadas y fotos de artistas se cargan directo desde Deezer, que recibe tu
-            dirección IP. El audio pasa por nuestro servidor, así que para el audio Deezer no ve tu IP.
+            <strong>Deezer:</strong> el audio de cada ronda y las portadas y fotos de artistas se cargan directo
+            desde Deezer, que recibe tu dirección IP. Nuestro servidor solo le pide el enlace de la canción, sin
+            mandarle nada sobre ti.
           </li>
           <li>
             <strong>Modo fiesta:</strong> para conectar los dispositivos se usa el servidor público de PeerJS, que

@@ -159,6 +159,18 @@ export function useGameSession(config: SessionConfig) {
     if (next) audioEngine.preload(streamUrl(next));
   }, [tickets, index]);
 
+  // Playlists pick one song per request, so the next one is asked for (and its audio downloaded)
+  // as soon as this round starts, not when it ends: "next song" is then instant.
+  const playlistMore = !!config.playlist && config.count !== null && index + 1 < config.count;
+  const currentToken = ticket?.token;
+  useEffect(() => {
+    if (!playlistMore || !currentToken || nextTicketRef.current) return;
+    nextTicketRef.current = fetchEndlessTicket().then((t) => {
+      if (t) audioEngine.preload(streamUrl(t));
+      return t;
+    });
+  }, [playlistMore, currentToken, fetchEndlessTicket]);
+
   const onRoundFinished = useCallback(
     (outcome: RoundOutcome) => {
       // One outcome per round, whatever the round reports.
@@ -190,7 +202,7 @@ export function useGameSession(config: SessionConfig) {
       }
       // Endless play and playlists: pick and preload the next song while the player reads the reveal.
       const more = configRef.current.count === null || (!!configRef.current.playlist && all.length < (count ?? 0));
-      if (more) {
+      if (more && !nextTicketRef.current) {
         nextTicketRef.current = fetchEndlessTicket().then((t) => {
           if (t) audioEngine.preload(streamUrl(t));
           return t;
