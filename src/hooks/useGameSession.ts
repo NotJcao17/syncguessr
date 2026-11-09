@@ -16,11 +16,20 @@ import {
 import { RoundTicket, Source } from "@/lib/types";
 import { RoundOutcome, streamUrl } from "./useRound";
 
-export type Mode = "libre" | "partida" | "artista" | "diario";
+export type Mode = "libre" | "partida" | "artista" | "diario" | "playlist";
+
+/** Playlist mode: the sealed song list and the songs already heard (shared across its games). */
+export interface PlaylistSession {
+  data: string;
+  played: Set<number>;
+}
 
 export interface SessionConfig {
   mode: Mode;
-  source: Source;
+  /** Catalog modes: which songs can come up. */
+  source?: Source;
+  /** Playlist mode: rounds come from the playlist, one at a time, even in a fixed-length game. */
+  playlist?: PlaylistSession;
   /** Songs in the game; null for endless free play. */
   count: number | null;
   /** Fixed games only: same seed, same songs. */
@@ -81,6 +90,21 @@ export function useGameSession(config: SessionConfig) {
   });
 
   const fetchEndlessTicket = useCallback(async (): Promise<RoundTicket | null> => {
+    const { playlist } = configRef.current;
+    if (playlist) {
+      const res = await postJson<RoundTicket & { skipped?: number[] }>("/api/playlist/round", {
+        playlist: playlist.data,
+        played: [...playlist.played],
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return null;
+      }
+      // Every song had been heard: start over. Songs with no match on Deezer are never asked again.
+      if (res.data.recycled) playlist.played.clear();
+      for (const slot of [...(res.data.skipped ?? []), res.data.slot]) if (slot !== undefined) playlist.played.add(slot);
+      return { token: res.data.token, slot: res.data.slot, recycled: res.data.recycled };
+    }
     const res = await postJson<RoundTicket>("/api/round", {
       source: configRef.current.source,
       exclude: loadHistory(),
@@ -102,8 +126,8 @@ export function useGameSession(config: SessionConfig) {
     setStreak(0);
     setTickets([]);
     nextTicketRef.current = null;
-    const { count, source, seed, avoidRepeats } = configRef.current;
-    if (count === null) {
+    const { count, source, seed, avoidRepeats, playlist } = configRef.current;
+    if (count === null || playlist) {
       const ticket = await fetchEndlessTicket();
       if (ticket) setTickets([ticket]);
     } else {
@@ -164,8 +188,9 @@ export function useGameSession(config: SessionConfig) {
         addToHistory(outcome.track.id);
         recentArtistsRef.current = [...recentArtistsRef.current, outcome.track.artist].slice(-3);
       }
-      // Endless play: pick and preload the next song while the player reads the reveal.
-      if (configRef.current.count === null) {
+      // Endless play and playlists: pick and preload the next song while the player reads the reveal.
+      const more = configRef.current.count === null || (!!configRef.current.playlist && all.length < (count ?? 0));
+      if (more) {
         nextTicketRef.current = fetchEndlessTicket().then((t) => {
           if (t) audioEngine.preload(streamUrl(t));
           return t;
@@ -183,7 +208,7 @@ export function useGameSession(config: SessionConfig) {
   }, []);
 
   const next = useCallback(async () => {
-    if (configRef.current.count !== null) {
+    if (configRef.current.count !== null && !configRef.current.playlist) {
       setIndex((i) => i + 1);
       return;
     }
@@ -204,7 +229,7 @@ export function useGameSession(config: SessionConfig) {
   /** Audio for this round could not be loaded: swap in another song before the player acts. */
   const handleLoadError = useCallback(async () => {
     if (!ticket) return;
-    if (configRef.current.count !== null) {
+    if (configRef.current.count !== null && !configRef.current.playlist) {
       // Fixed games carry spare songs from the same seed, so a daily game stays the same for everyone.
       const spare = sparesRef.current.shift();
       if (spare) setTickets((prev) => prev.map((t, i) => (i === index ? spare : t)));

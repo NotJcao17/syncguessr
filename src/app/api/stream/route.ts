@@ -70,7 +70,8 @@ const HARMLESS_VERSION =
 async function previewUrl(trackId: number, timing: Timing): Promise<string | null> {
   const data: DeezerTrack | null = await deezerApi(`/track/${trackId}`, timing);
   if (data?.preview) return data.preview;
-  const track = getTrack(trackId);
+  // Playlist songs aren't in the catalog: their own Deezer data names them for the fallback search.
+  const track = getTrack(trackId) ?? (data?.artist ? { artist: data.artist.name, title: data.title } : null);
   if (!track) return null;
   timing.fallback = true;
   const found = await deezerApi(`/search?q=${encodeURIComponent(`${track.artist} ${track.title}`)}&limit=25`, timing);

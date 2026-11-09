@@ -178,7 +178,8 @@ export function useRound({
       const token = tokenRef.current;
       setBusy(true);
       audioEngine.stop();
-      const res = await verify({ token, guessId: item.id });
+      // Title and artist only matter in playlist mode, where guesses come from all of Deezer.
+      const res = await verify({ token, guessId: item.id, guessTitle: item.title, guessArtist: item.artist });
       setBusy(false);
       if (tokenRef.current !== token || !res) return;
       const g = { title: item.title, artist: item.artist };

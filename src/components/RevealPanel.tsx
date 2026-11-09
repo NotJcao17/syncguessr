@@ -78,7 +78,8 @@ export function RevealPanel({
               <h2 className="text-2xl sm:text-3xl">{track.title}</h2>
               <p className="mt-1 text-lg font-semibold text-indigo-soft">{track.artist}</p>
               <p className="mt-0.5 text-sm text-ink-3">
-                {track.year} · {track.album}
+                {track.year ? `${track.year} · ` : ""}
+                {track.album}
               </p>
               {won && guessedArtist && guessedArtist !== track.artist && (
                 <p className="mt-2 text-sm text-ink-3">Elegiste la versión de {guessedArtist}; cuenta igual.</p>

@@ -1,4 +1,14 @@
-import { LOGO_VIEWBOX, QUESTION_DOT, QUESTION_PATH, RING_MASK, RINGS_PATH } from "./logoPaths";
+import { LOGO_VIEWBOX, QUESTION_DOT, QUESTION_PATH, RING_MASK, RINGS_PATH, SYNCORA_CLEF_PATH } from "./logoPaths";
+
+/** Syncora Player's mark: the same rings around a treble clef. */
+export function SyncoraMark({ className = "size-8" }: { className?: string }) {
+  return (
+    <svg viewBox={LOGO_VIEWBOX} className={className} aria-hidden="true">
+      <path fill="var(--color-indigo-soft)" fillRule="evenodd" d={RINGS_PATH} />
+      <path fill="currentColor" fillRule="evenodd" d={SYNCORA_CLEF_PATH} />
+    </svg>
+  );
+}
 
 /** syncguessr mark: Syncora's sound rings around a question mark. */
 export function LogoMark({ className = "size-8", title }: { className?: string; title?: string }) {

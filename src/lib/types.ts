@@ -106,6 +106,22 @@ export interface RoundTicket {
   token: string;
   /** True when every song matching the filters had been played and the history was recycled. */
   recycled?: boolean;
+  /** Playlist mode: which song of the playlist this is (an index into the sealed list). */
+  slot?: number;
+}
+
+export type PlaylistSource = "spotify" | "syncora" | "deezer";
+
+/** A playlist ready to play. `data` is the sealed song list; the browser can't read it. */
+export interface PlaylistInfo {
+  data: string;
+  source: PlaylistSource;
+  id: string;
+  name: string;
+  cover: string;
+  count: number;
+  /** The link as pasted, to load it again from the recent list. */
+  url: string;
 }
 
 export interface RevealedTrack {

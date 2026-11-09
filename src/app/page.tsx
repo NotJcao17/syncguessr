@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ClientOnly } from "@/components/ClientOnly";
 import { Icon } from "@/components/Icon";
-import { LogoMark, Wordmark } from "@/components/Logo";
+import { LogoMark, SyncoraMark, Wordmark } from "@/components/Logo";
 import { catalogSize } from "@/lib/catalog";
 import { ModeGrid, ModeGridFallback } from "./HomeStatus";
 
@@ -31,9 +31,33 @@ export default function Home() {
         <ModeGrid />
       </ClientOnly>
 
-      <footer className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-8 pb-5 text-sm text-ink-3">
+      <a
+        href="https://syncoraplayer.app"
+        rel="noopener"
+        className="group mt-3 flex items-center gap-4 rounded-[24px] border border-line/60 p-5 transition-[transform,background-color] duration-300 ease-[var(--ease-out-quint)] hover:bg-surface active:scale-[0.985]"
+      >
+        <SyncoraMark className="size-12 shrink-0 text-ink" />
+        <div className="min-w-0 flex-1">
+          <p className="font-extrabold wide tracking-[-0.02em]">¿No tienes dónde escuchar tu música?</p>
+          <p className="mt-0.5 text-[0.95rem] leading-snug text-ink-3">
+            Prueba Syncora Player, nuestro reproductor gratuito y de código abierto para Android y Windows. Sin
+            anuncios y sin cuenta.
+          </p>
+        </div>
+        <Icon
+          name="next"
+          className="size-6 shrink-0 text-indigo-soft transition-transform duration-300 ease-[var(--ease-out-quint)] group-hover:translate-x-0.5"
+        />
+      </a>
+
+      <footer className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-8 pb-5 text-sm text-ink-3">
         <span>{songs} canciones en español e inglés</span>
-        <span>Audio de Deezer</span>
+        <span className="flex flex-wrap gap-x-4 gap-y-2">
+          <span>Audio de Deezer</span>
+          <Link href="/privacidad" className="underline underline-offset-[3px] hover:text-ink">
+            Aviso de privacidad
+          </Link>
+        </span>
       </footer>
     </main>
   );

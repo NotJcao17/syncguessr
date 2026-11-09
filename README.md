@@ -72,6 +72,7 @@ There are no accounts and no database: progress, records and stats live in the b
 | ⏱️ **Game** | 5 songs with your own filters. Records are kept per difficulty mix. |
 | 🎤 **Artist mode** | 5 songs from the artists you choose, with a record per selection. Selections can be saved by name. |
 | 🔀 **Free play** | Endless, with filters and a streak. No points, made for practice. |
+| 🎵 **Your playlist** | Paste a public Spotify, Syncora Player or Deezer playlist and guess its songs (5, 10 or 20 per game), searching all of Deezer. |
 | 🎉 **Party mode** | The music plays only on the host's device; the others join with a 4-letter code and guess from their phones. |
 
 ### Scoring
@@ -92,7 +93,9 @@ There are no accounts and no database: progress, records and stats live in the b
 - 🔊 **Web Audio engine** that starts at the first audible sound (no silent intros), with fades and
   preloading of the next fragment.
 - 🔎 **Search only inside the curated catalog**: accent-insensitive, instant, and without covers,
-  live versions or duplicates in the suggestions.
+  live versions or duplicates in the suggestions. Playlist mode searches all of Deezer instead, with
+  the ranking ported from Syncora Player's search (text relevance plus popularity, a boost for the
+  artist the query names, one entry per song).
 - 🎛️ **Filters** by language, difficulty (easy, medium, hard, expert), genre (split by Spanish and
   English) and era, with the number of available songs on every chip.
 - ⭐ **Only hits** in artist mode: just the 10 best-known songs of each artist (half if they have few).
@@ -116,6 +119,20 @@ There are no accounts and no database: progress, records and stats live in the b
 ### Fair play
 - 🔐 Round tokens are **encrypted on the server** (`SYNCGUESSR_SECRET`), so the browser never sees
   the Deezer id of the song that is playing; audio goes through a server proxy.
+- 🎵 In playlist mode the song list is also sealed: the browser gets the playlist's name, cover and
+  size, and carries an encrypted list it can't read. Each round the server picks a song and, for
+  Spotify, finds it on Deezer (same title, one of the same artists, closest length, no live or
+  remix versions).
+
+### Playlist sources
+- **Spotify**: read from the public embed page (`open.spotify.com/embed/playlist/…`), up to 100
+  songs. The Web API is not an option (Development Mode allows 5 users and its policy bars games),
+  and the embed page can change without notice; if it does, only Spotify links stop working.
+- **Syncora Player**: shared links (`syncoraplayer.app/playlist/<id>`) are read from Syncora's
+  Supabase with its public key; songs already carry their Deezer id.
+- **Deezer**: the public API (`/playlist/{id}/tracks`).
+
+Nothing is stored on the server, and playlists over 400 songs are sampled.
 
 ---
 
@@ -139,17 +156,21 @@ There are no accounts and no database: progress, records and stats live in the b
 music-guessr/
 ├── src/
 │   ├── app/
-│   │   ├── api/            # round, game, verify, search, artists, catalog, plays, stream (audio proxy)
+│   │   ├── api/            # round, game, verify, search (+ search/deezer), playlist (import, round), artists, catalog, plays, stream (audio proxy)
 │   │   ├── diario/         # Daily challenge
 │   │   ├── partida/        # Game (filters + challenge links)
 │   │   ├── artista/        # Artist mode
 │   │   ├── libre/          # Free play
 │   │   ├── fiesta/         # Party mode (host and guests)
+│   │   ├── playlist/       # Playlist mode
+│   │   ├── privacidad/     # Privacy notice
 │   │   └── estadisticas/   # Personal stats
 │   ├── components/         # GameScreen, StageRuler, SearchBox, RevealPanel, GameSummary, FilterPanel…
 │   ├── hooks/              # useRound (one round), useGameSession (a sequence of rounds)
 │   ├── lib/
 │   │   ├── catalog.ts      # Filters, random pick with artist diversity, seeded pick
+│   │   ├── playlists.ts    # Playlist links, import from Spotify/Syncora/Deezer, matching to Deezer
+│   │   ├── deezerSearch.ts # Deezer-wide search ranking (ported from Syncora Player)
 │   │   ├── audioEngine.ts  # Web Audio: start at first audible sound, fades, preloading
 │   │   └── scoring.ts      # Hints and points
 │   └── data/tracks.json    # The generated catalog

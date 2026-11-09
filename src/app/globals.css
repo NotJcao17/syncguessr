@@ -117,6 +117,41 @@
     font-stretch: 112%;
   }
 
+  /* Long-form text pages (aviso de privacidad), same rhythm as syncora-web's legal pages. */
+  .doc h2 {
+    margin-top: 2.5rem;
+    font-size: clamp(1.25rem, 1.05rem + 0.9vw, 1.6rem);
+    font-weight: 800;
+    font-stretch: 108%;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+  .doc p,
+  .doc ul {
+    margin-top: 0.9rem;
+    color: var(--color-ink-2);
+    line-height: 1.6;
+  }
+  .doc ul {
+    display: grid;
+    gap: 0.5rem;
+    padding-left: 1.25rem;
+    list-style: disc;
+  }
+  .doc li::marker {
+    color: var(--color-ink-3);
+  }
+  .doc strong {
+    color: var(--color-ink);
+    font-weight: 700;
+  }
+  .doc a {
+    color: var(--color-indigo-soft);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    overflow-wrap: anywhere;
+  }
+
   .eyebrow {
     font-size: 0.8125rem;
     font-weight: 600;

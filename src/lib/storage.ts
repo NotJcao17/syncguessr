@@ -1,7 +1,7 @@
 "use client";
 
 import { DEFAULT_FILTERS, sanitizeFilters } from "./filters";
-import { ArtistResult, Filters, MAX_ARTISTS } from "./types";
+import { ArtistResult, Filters, MAX_ARTISTS, PlaylistInfo } from "./types";
 
 /** Everything the player keeps lives in this browser. Every access is guarded: storage can be blocked. */
 
@@ -15,6 +15,7 @@ const KEYS = {
   daily: "syncguessr:daily",
   artists: "syncguessr:artists",
   artistSets: "syncguessr:artist-sets",
+  playlists: "syncguessr:playlists",
 } as const;
 
 function read<T>(key: string, fallback: T): T {
@@ -177,4 +178,30 @@ export function saveDaily(day: string, result: DailyResult, yesterday: string) {
   s.bestDailyStreak = Math.max(s.bestDailyStreak, s.dailyStreak);
   s.lastDaily = day;
   write(KEYS.stats, s);
+}
+
+// --- Playlists -----------------------------------------------------------------------------------
+
+/** A playlist played recently, to load it again with one tap. The song list itself is not kept. */
+export type RecentPlaylist = Omit<PlaylistInfo, "data">;
+
+const MAX_RECENT_PLAYLISTS = 6;
+
+export function loadRecentPlaylists(): RecentPlaylist[] {
+  const list = read<RecentPlaylist[]>(KEYS.playlists, []);
+  return Array.isArray(list) ? list.filter((p) => p && typeof p.url === "string" && typeof p.name === "string") : [];
+}
+
+export function saveRecentPlaylist(p: PlaylistInfo) {
+  const { data: _data, ...entry } = p;
+  void _data;
+  const rest = loadRecentPlaylists().filter((x) => !(x.source === p.source && x.id === p.id));
+  write(KEYS.playlists, [entry, ...rest].slice(0, MAX_RECENT_PLAYLISTS));
+}
+
+export function removeRecentPlaylist(p: RecentPlaylist) {
+  write(
+    KEYS.playlists,
+    loadRecentPlaylists().filter((x) => !(x.source === p.source && x.id === p.id))
+  );
 }

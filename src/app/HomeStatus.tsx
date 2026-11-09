@@ -73,7 +73,7 @@ function ModeCard({
   );
 }
 
-/** The five ways to play, each with its own progress at a glance. */
+/** The six ways to play, each with its own progress at a glance. */
 export function ModeGrid() {
   const snap = useSnapshot();
   const { daily, stats } = snap;
@@ -109,6 +109,13 @@ export function ModeGrid() {
         meta={stats.bestFreeStreak > 0 ? `Mejor racha ${stats.bestFreeStreak}` : null}
       />
       <ModeCard
+        href="/playlist"
+        icon="notes"
+        title="Tu playlist"
+        text="Pega una playlist de Spotify, Syncora Player o Deezer y adivina sus canciones."
+        wide
+      />
+      <ModeCard
         href="/fiesta"
         icon="users"
         title="Modo fiesta"
@@ -126,6 +133,7 @@ export function ModeGridFallback() {
       {[0, 1, 2].map((i) => (
         <div key={i} className="h-[8.5rem] rounded-[24px] bg-surface" />
       ))}
+      <div className="h-[8.5rem] rounded-[24px] bg-surface sm:col-span-2" />
       <div className="h-[8.5rem] rounded-[24px] bg-surface sm:col-span-2" />
     </div>
   );

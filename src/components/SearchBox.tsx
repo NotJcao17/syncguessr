@@ -19,13 +19,15 @@ export const SearchBox = forwardRef<
   {
     language: LanguageFilter;
     artists?: string[];
+    /** "deezer" searches all of Deezer (playlist mode) instead of the curated catalog. */
+    source?: "catalog" | "deezer";
     disabled: boolean;
     triedTitles: string[];
     onGuess: (item: SearchResultItem) => void;
     onSkip: () => void;
     skipLabel: string;
   }
->(function SearchBox({ language, artists, disabled, triedTitles, onGuess, onSkip, skipLabel }, ref) {
+>(function SearchBox({ language, artists, source = "catalog", disabled, triedTitles, onGuess, onSkip, skipLabel }, ref) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [open, setOpen] = useState(false);
@@ -52,7 +54,8 @@ export const SearchBox = forwardRef<
       try {
         const params = new URLSearchParams({ q, language });
         for (const a of artistKey ? artistKey.split("|") : []) params.append("artist", a);
-        const res = await fetch(`/api/search?${params}`, { signal: controller.signal });
+        const url = source === "deezer" ? `/api/search/deezer?${new URLSearchParams({ q })}` : `/api/search?${params}`;
+        const res = await fetch(url, { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
           setResults(data.results ?? []);
@@ -64,12 +67,13 @@ export const SearchBox = forwardRef<
       } finally {
         setLoading(false);
       }
-    }, 120);
+      // Deezer is a network round trip with a rate limit; the local catalog answers instantly.
+    }, source === "deezer" ? 300 : 120);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, language, artistKey, selected]);
+  }, [query, language, artistKey, selected, source]);
 
   useEffect(() => {
     // "click" rather than "pointerdown": a finger that scrolls the page never fires a click.
@@ -188,7 +192,7 @@ export const SearchBox = forwardRef<
       {open && query.trim().length >= 2 && !selected && (
         <div className="absolute inset-x-0 top-full z-30 mt-2 animate-fade overflow-hidden rounded-2xl bg-surface-2 shadow-[0_24px_60px_-20px_oklch(0_0_0/0.9)] ring-1 ring-ink/10">
           {results.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-ink-3">{loading ? "Buscando…" : "Nada con ese nombre en el catálogo."}</p>
+            <p className="px-4 py-4 text-sm text-ink-3">{loading ? "Buscando…" : source === "deezer" ? "Nada con ese nombre en Deezer." : "Nada con ese nombre en el catálogo."}</p>
           ) : (
             <ul id={listId} role="listbox" className="max-h-[min(44dvh,360px)] overflow-y-auto p-1.5">
               {results.map((item, i) => {

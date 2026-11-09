@@ -29,6 +29,8 @@ export interface GameScreenProps {
   /** Restricts the search box (language filter, chosen artists). */
   searchLanguage: LanguageFilter;
   searchArtists?: string[];
+  /** Playlist mode searches all of Deezer instead of the catalog. */
+  searchSource?: "catalog" | "deezer";
   /** Fixed games: where the high score is kept. */
   recordKey?: string;
   summaryHeading?: string;
@@ -308,6 +310,7 @@ export function GameScreen(props: GameScreenProps) {
                   ref={searchRef}
                   language={props.searchLanguage}
                   artists={props.searchArtists}
+                  source={props.searchSource}
                   disabled={round.phase !== "ready"}
                   triedTitles={triedTitles}
                   onGuess={(item) => void round.guess(item)}
