@@ -14,8 +14,6 @@ const SOURCE_LABEL: Record<PlaylistSource, string> = {
   deezer: "Deezer",
 };
 
-const LENGTHS = [GAME_LENGTH, 10, 20];
-
 const songsLabel = (n: number) => `${n} ${n === 1 ? "canción" : "canciones"}`;
 
 function Cover({ src, className }: { src: string; className: string }) {
@@ -35,7 +33,6 @@ export function PlaylistGame() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
-  const [length, setLength] = useState(GAME_LENGTH);
   const [recent, setRecent] = useState<RecentPlaylist[]>(loadRecentPlaylists);
   const [game, setGame] = useState<number | null>(null);
   // Songs already heard, per playlist, for as long as the page is open: the next game starts with the rest.
@@ -59,7 +56,6 @@ export function PlaylistGame() {
       }
       const info = data as PlaylistInfo;
       setPlaylist(info);
-      setLength((l) => (l > info.count ? GAME_LENGTH : l));
       setLink("");
       saveRecentPlaylist(info);
       setRecent(loadRecentPlaylists());
@@ -80,10 +76,10 @@ export function PlaylistGame() {
     return (
       <GameScreen
         key={game}
-        config={{ mode: "playlist", count: length, playlist: { data: playlist.data, played } }}
+        config={{ mode: "playlist", count: GAME_LENGTH, playlist: { data: playlist.data, played } }}
         stages={[...STAGES]}
         title={playlist.name}
-        subtitle={`${SOURCE_LABEL[playlist.source]} · ${songsLabel(length)}`}
+        subtitle={`${SOURCE_LABEL[playlist.source]} · ${songsLabel(GAME_LENGTH)}`}
         searchLanguage="all"
         searchSource="deezer"
         summaryHeading={playlist.name}
@@ -113,7 +109,7 @@ export function PlaylistGame() {
       footer={
         <div className="flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-sm text-ink-3">
-            {playlist ? `${songsLabel(length)} de ${playlist.name}` : "Primero carga una playlist"}
+            {playlist ? `${songsLabel(GAME_LENGTH)} de ${playlist.name}` : "Primero carga una playlist"}
           </p>
           <button type="button" className="btn btn-primary" disabled={!playlist} onClick={() => setGame((g) => (g ?? 0) + 1)}>
             Empezar
@@ -168,26 +164,10 @@ export function PlaylistGame() {
       )}
 
       {playlist && (
-        <fieldset className="mt-7">
-          <legend className="eyebrow">Canciones por partida</legend>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {LENGTHS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className="chip"
-                aria-pressed={length === n}
-                disabled={n > playlist.count}
-                onClick={() => setLength(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-          <p className="mt-3 text-sm text-ink-3">
-            Mismos puntos que en Partida. Las canciones no se repiten hasta que suenen todas las de la playlist.
-          </p>
-        </fieldset>
+        <p className="mt-4 text-sm text-ink-3">
+          {GAME_LENGTH} canciones por partida, con los mismos puntos que en Partida. No se repiten hasta que suenen
+          todas las de la playlist.
+        </p>
       )}
 
       {others.length > 0 && (

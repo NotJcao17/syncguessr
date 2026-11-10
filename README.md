@@ -72,7 +72,7 @@ There are no accounts and no database: progress, records and stats live in the b
 | ⏱️ **Game** | 5 songs with your own filters. Records are kept per difficulty mix. |
 | 🎤 **Artist mode** | 5 songs from the artists you choose, with a record per selection. Selections can be saved by name. |
 | 🔀 **Free play** | Endless, with filters and a streak. No points, made for practice. |
-| 🎵 **Your playlist** | Paste a public Spotify, Syncora Player or Deezer playlist and guess its songs (5, 10 or 20 per game), searching all of Deezer. |
+| 🎵 **Your playlist** | Paste a public Spotify, Syncora Player or Deezer playlist and guess 5 of its songs per game, searching all of Deezer. |
 | 🎉 **Party mode** | The music plays only on the host's device; the others join with a 4-letter code and guess from their phones. |
 
 ### Scoring
